@@ -307,3 +307,45 @@ not a Dockerfile change.
 reports over 200 findings, almost all unfixable OS-level items in packages the app never
 executes. The number is not the signal. The signal is the fixable list, and whether the
 things on it are things you run.
+
+## 020 — MariaDB and SQLite added as database options, treated differently
+
+**Context:** Asked to add MariaDB and SQLite "if that makes sense and not if not".
+
+**MariaDB: yes, as a plain second service.** It is structurally identical to Postgres:
+an official image, a data directory to put on a named volume, credentials via
+environment, a healthcheck, a hostname the app connects to. It slots into the existing
+`DB_SPECS` table with no new concepts. Two small generalisations fell out: the URL blank
+now accepts every scheme a driver might use (`mysql://` or `mariadb://`), and the image
+blank accepts `mysql:` as well as `mariadb:`, since users reasonably reach for either. The
+Django preset gained a table of native driver dependencies (`libpq-dev`/`libpq5` for
+Postgres, `default-libmysqlclient-dev`/`libmariadb3` for MariaDB) so the multi-stage
+"build headers stay behind, runtime library comes along" lesson is taught for both.
+
+**SQLite: yes, but it is not a service and must not be modelled as one.** SQLite is a
+library inside the app process; the "database" is a file. Making it a compose service
+would teach something false. Instead choosing it produces:
+
+- `ENV DATABASE_PATH=/app/data/...` in the Dockerfile (env-vars),
+- in production, `RUN mkdir -p /app/data && chown ...` before `USER` (non-root-user),
+- a named volume `app-data:/app/data` on the *app* service and a top-level `volumes:`
+  declaration (volumes-vs-bind-mounts),
+- `*.db`, `*.sqlite`, `*.sqlite3` in `.dockerignore` (dockerignore),
+- and **no** `compose-networking` requirement, because there is nothing to network.
+
+That last point exposed an inaccuracy: the `services:` and `app:` lines were tagged with
+the networking concept unconditionally, so even a database-less project demanded a quiz
+about connecting to a database container. The tag now applies only when a second service
+exists, and the `app:` explanation changes wording accordingly. A consequence is that the
+static-site production preset touches four concepts rather than five, which is honest.
+
+This is also exactly how the app containerizes itself (decision #002, the walkthrough
+page), so a user who picks SQLite sees the same pattern twice: once generated for their
+project, once real.
+
+**The linter learned the same distinctions.** For SQLite it errors if the app service has
+no volume, warns if the only mount is a bind mount into the source tree, errors if the
+named volume is undeclared, errors in production if nothing prepares the data directory
+for the non-root user, warns if a database service is present anyway, and warns if the
+SQLite file is not in `.dockerignore`. For MariaDB it finds the database service under
+either image name.

@@ -8,11 +8,13 @@ const DB_SPECS = {
   postgres: {
     service: 'db',
     image: 'postgres:16-alpine',
+    imageNames: ['postgres'],
     port: 5432,
     volume: 'db-data',
     dataPath: '/var/lib/postgresql/data',
     urlEnv: 'DATABASE_URL',
     url: 'postgres://app:app@db:5432/app',
+    urlSchemes: ['postgres', 'postgresql'],
     healthcheck: 'pg_isready -U app -d app',
     env: [
       ['POSTGRES_USER', 'app'],
@@ -20,14 +22,34 @@ const DB_SPECS = {
       ['POSTGRES_DB', 'app'],
     ],
   },
+  mariadb: {
+    service: 'db',
+    image: 'mariadb:11.4',
+    imageNames: ['mariadb', 'mysql'],
+    port: 3306,
+    volume: 'db-data',
+    dataPath: '/var/lib/mysql',
+    urlEnv: 'DATABASE_URL',
+    url: 'mysql://app:app@db:3306/app',
+    urlSchemes: ['mysql', 'mariadb'],
+    healthcheck: 'healthcheck.sh --connect --innodb_initialized',
+    env: [
+      ['MARIADB_USER', 'app'],
+      ['MARIADB_PASSWORD', 'app'],
+      ['MARIADB_DATABASE', 'app'],
+      ['MARIADB_ROOT_PASSWORD', 'root'],
+    ],
+  },
   redis: {
     service: 'redis',
     image: 'redis:7-alpine',
+    imageNames: ['redis', 'valkey'],
     port: 6379,
     volume: 'redis-data',
     dataPath: '/data',
     urlEnv: 'REDIS_URL',
     url: 'redis://redis:6379/0',
+    urlSchemes: ['redis'],
     healthcheck: 'redis-cli ping',
     env: [],
   },
@@ -36,7 +58,8 @@ const DB_SPECS = {
 /**
  * @param {object} o
  * @param {string} o.appType      node | django | static | generic
- * @param {string} o.database     postgres | redis | none
+ * @param {string} o.database     postgres | mariadb | redis | sqlite | none
+ * @param {string} [o.dataDir]    for sqlite: the in-container folder holding the database file
  * @param {string} o.target       dev | prod
  * @param {number} o.port         container port the app listens on
  * @param {number} [o.hostPort]   host port to publish (defaults to port)
@@ -51,16 +74,17 @@ function composeLines(o) {
     line(
       'c-services',
       'services:',
-      'A compose file is a list of services, each of which becomes one container. Older tutorials start with a version: key; modern compose ignores it, so it is left out.',
-      { concept: 'compose-networking' }
+      'A compose file is a list of services, each of which becomes one container. Older tutorials start with a version: key; modern compose ignores it, so it is left out.'
     )
   );
   L.push(
     line(
       'c-app',
       '  app:',
-      'The service name doubles as its hostname on the private network compose creates. Other services could reach this one at http://app:' + o.port + '.',
-      { concept: 'compose-networking' }
+      db
+        ? 'The service name doubles as its hostname on the private network compose creates. The ' + db.service + ' service below could reach this one at http://app:' + o.port + ', and this one reaches the database at ' + db.service + '.'
+        : 'The service name. With a single service there is no networking to think about: compose still creates a private network, but nothing else is on it.',
+      db ? { concept: 'compose-networking' } : {}
     )
   );
   L.push(
@@ -112,7 +136,7 @@ function composeLines(o) {
           {
             concept: 'compose-networking',
             prompt: 'connection URL',
-            accept: [new RegExp(`^${db.url.split('@')[0].split('//')[0]}//.*@${db.service}:${db.port}(/.*)?$`)],
+            accept: [new RegExp(`^(${db.urlSchemes.join('|')})://.*@${db.service}:${db.port}(/.*)?$`)],
             hint: `A URL of the form scheme://user:pass@HOST:${db.port}/name. The host is the service name of the database, not localhost.`,
             feedback: [
               { match: /localhost|127\.0\.0\.1/, why: 'Inside the app container, localhost is the app container. The database is a separate container reachable by its service name.' },
@@ -168,6 +192,31 @@ function composeLines(o) {
     }
   }
 
+  if (o.database === 'sqlite') {
+    if (o.target !== 'dev') L.push(line('c-volumes', '    volumes:', 'Storage that outlives the container. SQLite is a file, so the database needs the same treatment a Postgres container would get: a named volume.', { concept: 'volumes-vs-bind-mounts' }));
+    L.push(
+      blank(
+        'c-sqlite-volume',
+        `      - ___:${o.dataDir}`,
+        'app-data',
+        `A named volume over the folder the SQLite file lives in. The container filesystem is thrown away on removal; Docker-managed storage is not. ${o.target === 'dev' ? 'It sits inside the bind mount above and takes precedence for that one folder, so your project tree on the host never contains the database file.' : 'There is no second service because SQLite runs inside the app process; the whole "database" is this one mount.'}`,
+        {
+          concept: 'volumes-vs-bind-mounts',
+          prompt: 'volume name',
+          accept: [new RegExp('^[a-z][a-z0-9_-]*$')],
+          hint: 'A short name for Docker-managed storage, declared again under the top-level volumes: key.',
+          feedback: [
+            { match: /^\.\.?\//, why: 'A relative path is a bind mount into your project folder. The database file would then sit in your source tree, where it is easy to commit or COPY by accident. Use a named volume.' },
+            { match: /^\//, why: 'An absolute path is a bind mount from your machine. Prefer a named volume that Docker manages and that works the same on every OS.' },
+          ],
+        }
+      )
+    );
+    L.push(raw(''));
+    L.push(line('c-top-volumes', 'volumes:', 'Named volumes must be declared once at the top level. This is the list of storage compose will create and keep.', { concept: 'volumes-vs-bind-mounts' }));
+    L.push(line('c-top-volume', '  app-data:', null));
+  }
+
   if (db) {
     L.push(raw(''));
     L.push(
@@ -196,11 +245,11 @@ function composeLines(o) {
         {
           concept: 'base-images',
           prompt: 'image:tag',
-          accept: [new RegExp(`^${o.database}:\\d+(\\.\\d+)*(-[a-z0-9.]+)?$`)],
+          accept: [new RegExp(`^(${db.imageNames.join('|')}):\\d+(\\.\\d+)*(-[a-z0-9.]+)?$`)],
           hint: `The official ${o.database} image with a version tag, like name:MAJOR-variant.`,
           feedback: [
             { match: /latest$/, why: 'latest is a moving target: a database upgrade you did not ask for can corrupt or refuse to open the data volume. Pin a major version.' },
-            { match: new RegExp(`^${o.database}$`), why: 'No tag means latest. Pin a version so the data format stays stable.' },
+            { match: new RegExp(`^(${db.imageNames.join('|')})$`), why: 'No tag means latest. Pin a version so the data format stays stable.' },
             { match: /^(node|python|nginx|debian|ubuntu)/, why: `That is an application image. The database service needs the official ${o.database} image.` },
           ],
         }
@@ -272,6 +321,7 @@ function dockerignoreLines(o) {
     )
   );
   for (const extra of o.ignore || []) L.push(extra);
+  if (o.sqlite) L.push(line('i-sqlite', '*.db\n*.sqlite\n*.sqlite3', 'The SQLite database. Data belongs in a volume, never in an image: a copy baked in would be stale, and every copy of the image would carry it.', { concept: 'dockerignore' }));
   L.push(line('i-docker', 'Dockerfile\ndocker-compose.yml\n.dockerignore', 'The image does not need its own build instructions inside it. Harmless but pointless, and changing them would invalidate the COPY . . layer.', { concept: 'dockerignore' }));
   return L;
 }

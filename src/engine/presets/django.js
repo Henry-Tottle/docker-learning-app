@@ -27,10 +27,29 @@ const baseImageBlank = (id, template, extra) =>
     }
   );
 
+const DATA_DIR = '/app/data';
+
+// Python database drivers that need OS packages. Build-time packages go in
+// the builder stage, run-time libraries in the final one.
+const NATIVE = {
+  postgres: { driver: 'psycopg (the Postgres driver)', build: 'build-essential libpq-dev', runtime: 'libpq5', runtimeWhy: 'The Postgres driver needs the client *library* at run time (libpq5) but not the headers or compiler.' },
+  mariadb: { driver: 'mysqlclient (the MariaDB/MySQL driver)', build: 'build-essential pkg-config default-libmysqlclient-dev', runtime: 'libmariadb3', runtimeWhy: 'The MariaDB driver needs the client *library* at run time (libmariadb3) but not the headers, pkg-config or compiler.' },
+};
+
+const sqliteEnv = () =>
+  line(
+    'df-sqlite-env',
+    `ENV DATABASE_PATH=${DATA_DIR}/db.sqlite3`,
+    'Where Django should keep its SQLite file. Set in the Dockerfile as a default so the path is fixed by the image layout. Point DATABASES["default"]["NAME"] at os.environ["DATABASE_PATH"] in settings.py; compose mounts a volume at that folder so the file outlives the container.',
+    { concept: 'env-vars' }
+  );
+
 function build({ database, target }) {
   const df = [];
   const prod = target === 'prod';
-  const pg = database === 'postgres';
+  const native = NATIVE[database] || null;
+  const pg = !!native;
+  const sqlite = database === 'sqlite';
 
   if (prod) {
     df.push(line('df-syntax', '# syntax=docker/dockerfile:1', 'Opts in to the current Dockerfile syntax so features like multi-stage COPY --from behave consistently across Docker versions.'));
@@ -40,8 +59,8 @@ function build({ database, target }) {
       df.push(
         line(
           'df-build-deps',
-          'RUN apt-get update && apt-get install -y --no-install-recommends build-essential libpq-dev && rm -rf /var/lib/apt/lists/*',
-          'psycopg (the Postgres driver) may need a C compiler and the Postgres client headers to build. They belong in this throwaway stage only: the final image will get just the compiled result. Cleaning the apt lists in the same RUN keeps them out of the layer.',
+          `RUN apt-get update && apt-get install -y --no-install-recommends ${native.build} && rm -rf /var/lib/apt/lists/*`,
+          `${native.driver} may need a C compiler and the database client headers to build. They belong in this throwaway stage only: the final image will get just the compiled result. Cleaning the apt lists in the same RUN keeps them out of the layer.`,
           { concept: 'multi-stage-builds' }
         )
       );
@@ -88,12 +107,13 @@ function build({ database, target }) {
     df.push(raw(''));
     df.push(line('df-base-runtime', `FROM ${BASE}`, 'A second FROM starts the final image from a clean base. The compiler and headers installed above are not carried over; only what is explicitly copied is.', { concept: 'multi-stage-builds' }));
     df.push(line('df-py-env', 'ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1', 'No .pyc files cluttering the image, and unbuffered stdout so log lines show up in docker logs immediately instead of when a buffer fills.', { concept: 'env-vars' }));
+    if (sqlite) df.push(sqliteEnv());
     if (pg) {
       df.push(
         line(
           'df-runtime-deps',
-          'RUN apt-get update && apt-get install -y --no-install-recommends libpq5 && rm -rf /var/lib/apt/lists/*',
-          'The Postgres driver needs the client *library* at run time (libpq5) but not the headers or compiler. This is the payoff of the two stages: build tools stayed behind; only the small runtime library is installed here.',
+          `RUN apt-get update && apt-get install -y --no-install-recommends ${native.runtime} && rm -rf /var/lib/apt/lists/*`,
+          `${native.runtimeWhy} This is the payoff of the two stages: build tools stayed behind; only the small runtime library is installed here.`,
           { concept: 'multi-stage-builds' }
         )
       );
@@ -125,6 +145,16 @@ function build({ database, target }) {
         { concept: 'non-root-user' }
       )
     );
+    if (sqlite) {
+      df.push(
+        line(
+          'df-data-dir',
+          `RUN mkdir -p ${DATA_DIR} && chown appuser:appuser ${DATA_DIR}`,
+          'Creates the folder the volume will be mounted on and hands it to the unprivileged user. This runs as root, before USER, because the app will not have permission to do it later. Without it, the first migrate fails with a permission error.',
+          { concept: 'non-root-user' }
+        )
+      );
+    }
     df.push(
       blank(
         'df-user',
@@ -145,12 +175,13 @@ function build({ database, target }) {
   } else {
     df.push(baseImageBlank('df-base', 'FROM ___'));
     df.push(line('df-py-env', 'ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1', 'No .pyc files cluttering the image, and unbuffered stdout so log lines show up in docker logs immediately instead of when a buffer fills.', { concept: 'env-vars' }));
+    if (sqlite) df.push(sqliteEnv());
     if (pg) {
       df.push(
         line(
           'df-build-deps',
-          'RUN apt-get update && apt-get install -y --no-install-recommends build-essential libpq-dev && rm -rf /var/lib/apt/lists/*',
-          'psycopg (the Postgres driver) may need a C compiler and Postgres headers to build. In a dev image that is acceptable; the production preset moves them into a separate build stage.',
+          `RUN apt-get update && apt-get install -y --no-install-recommends ${native.build} && rm -rf /var/lib/apt/lists/*`,
+          `${native.driver} may need a C compiler and database client headers to build. In a dev image that is acceptable; the production preset moves them into a separate build stage.`,
           { concept: 'multi-stage-builds' }
         )
       );
@@ -238,8 +269,9 @@ function build({ database, target }) {
     )
   );
 
-  const compose = composeLines({ appType: 'django', database, target, port: PORT, devMounts: [] });
+  const compose = composeLines({ appType: 'django', database, target, port: PORT, devMounts: [], dataDir: DATA_DIR });
   const dockerignore = dockerignoreLines({
+    sqlite,
     ignore: [
       blank('i-pycache', '___', '__pycache__', 'Compiled bytecode from your machine. Python regenerates it, and copies built by a different Python version are useless at best.', {
         concept: 'dockerignore',
@@ -249,7 +281,7 @@ function build({ database, target }) {
         feedback: [{ match: /requirements|manage/, why: 'Those are needed in the image. The thing to exclude is generated bytecode.' }],
       }),
       line('i-venv', '.venv\nvenv', 'A virtualenv from your machine contains binaries for your OS and a copy of every package. The image installs its own from requirements.txt.', { concept: 'dockerignore' }),
-      line('i-sqlite', 'db.sqlite3', 'A local development database. Data does not belong in an image: it would be stale, and every copy of the image would carry it.', { concept: 'dockerignore' }),
+      ...(sqlite ? [] : [line('i-sqlite', 'db.sqlite3', 'A local development database. Data does not belong in an image: it would be stale, and every copy of the image would carry it.', { concept: 'dockerignore' })]),
     ],
   });
 

@@ -26,9 +26,20 @@ const baseImageBlank = (id, template, extra) =>
     }
   );
 
+const DATA_DIR = '/app/data';
+
+const sqliteEnv = () =>
+  line(
+    'df-sqlite-env',
+    `ENV DATABASE_PATH=${DATA_DIR}/app.db`,
+    'Where the app should open its SQLite file. Set in the Dockerfile as a default so the path is fixed by the image layout, not remembered by whoever runs it. Read it in your code with process.env.DATABASE_PATH. compose mounts a volume at that folder so the file outlives the container.',
+    { concept: 'env-vars' }
+  );
+
 function build({ database, target }) {
   const df = [];
   const prod = target === 'prod';
+  const sqlite = database === 'sqlite';
 
   if (prod) {
     df.push(line('df-syntax', '# syntax=docker/dockerfile:1', 'Opts in to the current Dockerfile syntax so features like multi-stage COPY --from behave consistently across Docker versions.'));
@@ -82,6 +93,7 @@ function build({ database, target }) {
       )
     );
     df.push(line('df-env', 'ENV NODE_ENV=production', 'Express and many libraries switch off debug output and enable caching when NODE_ENV is production. Set in the Dockerfile so it is the default for every container from this image.', { concept: 'env-vars' }));
+    if (sqlite) df.push(sqliteEnv());
     df.push(line('df-workdir2', 'WORKDIR /app', 'Each stage starts fresh, so the working directory has to be set again.'));
     df.push(
       blank(
@@ -101,6 +113,16 @@ function build({ database, target }) {
       )
     );
     df.push(line('df-copy-src', 'COPY . .', 'Now the application source. It changes most often, so it comes last: nothing after this line is expensive. .dockerignore decides what "." actually includes.', { concept: 'layer-caching' }));
+    if (sqlite) {
+      df.push(
+        line(
+          'df-data-dir',
+          `RUN mkdir -p ${DATA_DIR} && chown node:node ${DATA_DIR}`,
+          'Creates the folder the volume will be mounted on and hands it to the unprivileged user. This runs as root, before USER, because the app will not have permission to do it later. Without it, the first write to the database fails with a permission error.',
+          { concept: 'non-root-user' }
+        )
+      );
+    }
     df.push(
       blank(
         'df-user',
@@ -159,6 +181,7 @@ function build({ database, target }) {
       )
     );
     df.push(line('df-copy-src', 'COPY . .', 'Now the application source. It changes most often, so it comes last. In dev, compose bind-mounts your folder over this anyway, but the copy means the image also works standalone.', { concept: 'layer-caching' }));
+    if (sqlite) df.push(sqliteEnv());
   }
 
   df.push(
@@ -203,8 +226,9 @@ function build({ database, target }) {
     )
   );
 
-  const compose = composeLines({ appType: 'node', database, target, port: PORT, devMounts: ['/app/node_modules'] });
+  const compose = composeLines({ appType: 'node', database, target, port: PORT, devMounts: ['/app/node_modules'], dataDir: DATA_DIR });
   const dockerignore = dockerignoreLines({
+    sqlite,
     ignore: [
       blank('i-node-modules', '___', 'node_modules', 'The largest folder in most Node projects, and the image installs its own copy with npm anyway. Sending it would be slow, and native modules compiled on macOS would not run on Linux.', {
         concept: 'dockerignore',

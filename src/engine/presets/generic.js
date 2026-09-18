@@ -8,9 +8,12 @@ const { composeLines, dockerignoreLines } = require('../compose');
 const BASE = 'debian:bookworm-slim';
 const PORT = 8080;
 
+const DATA_DIR = '/app/data';
+
 function build({ database, target }) {
   const df = [];
   const prod = target === 'prod';
+  const sqlite = database === 'sqlite';
   df.push(
     blank(
       'df-base',
@@ -47,6 +50,7 @@ function build({ database, target }) {
     )
   );
   df.push(line('df-copy-src', 'COPY . .', 'Now the source, which changes most often, so it comes last. .dockerignore decides what "." includes.', { concept: 'layer-caching' }));
+  if (sqlite) df.push(line('df-sqlite-env', `ENV DATABASE_PATH=${DATA_DIR}/app.db`, 'Where the app should open its SQLite file. Set as a default in the image so the path matches the volume compose mounts there. Read it from the environment in your code.', { concept: 'env-vars' }));
   if (prod) {
     df.push(
       line(
@@ -56,6 +60,7 @@ function build({ database, target }) {
         { concept: 'non-root-user' }
       )
     );
+    if (sqlite) df.push(line('df-data-dir', `RUN mkdir -p ${DATA_DIR} && chown appuser:appuser ${DATA_DIR}`, 'Creates the folder the volume will be mounted on and hands it to the unprivileged user, while this step still runs as root.', { concept: 'non-root-user' }));
     df.push(
       blank('df-user', 'USER ___', 'appuser', 'Switches away from root before the app starts. Setup steps above needed root; the running app does not.', {
         concept: 'non-root-user',
@@ -83,8 +88,8 @@ function build({ database, target }) {
     )
   );
 
-  const compose = composeLines({ appType: 'generic', database, target, port: PORT, devMounts: [] });
-  const dockerignore = dockerignoreLines({ ignore: [] });
+  const compose = composeLines({ appType: 'generic', database, target, port: PORT, devMounts: [], dataDir: DATA_DIR });
+  const dockerignore = dockerignoreLines({ sqlite, ignore: [] });
   return { dockerfile: df, compose, dockerignore, port: PORT };
 }
 

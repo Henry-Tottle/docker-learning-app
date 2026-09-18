@@ -39,7 +39,9 @@ its own Dockerfile line by line at `/how-this-app-was-containerized`.
 ## How to use it
 
 1. **Why Docker?** (`/uses`) if you are starting from zero.
-2. **New project**: three questions (app type, database, dev/prod).
+2. **New project**: three questions (app type; database: none, PostgreSQL, MariaDB, SQLite
+   or Redis; dev/prod). SQLite is deliberately *not* a second service: it becomes a
+   volume on the app itself, the same way this app stores its own progress.
 3. **Guided build**: click every highlighted line. The files unlock for download once
    every explanation has been opened. Opening an explanation also unlocks that concept's
    quiz.
@@ -74,6 +76,10 @@ want to understand the tradeoffs.
   `PRESETS` and `APP_TYPES`. Add the app type's port and manifest/install regexes to
   `linter.js`. Run `npm test`: the suite will check every blank accepts its answer, every
   explanation is a sane length, and the linter passes your preset's own output.
+- **Add a database**: a server database (like MariaDB) is one entry in `DB_SPECS` in
+  `src/engine/compose.js`, plus native driver packages in the Django preset's `NATIVE`
+  table if its Python driver needs them. An embedded database (like SQLite) is a
+  different shape: see the `o.database === 'sqlite'` branches for the pattern.
 - **Add a concept**: append to `CONCEPTS` in `concepts.js`, then tag lines with its key.
   The test "every concept is reachable from at least one preset" will fail until you do.
 - **Change a gating rule**: `src/services/progress.js` only. The HTTP test walks the whole

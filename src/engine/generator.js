@@ -20,6 +20,8 @@ const APP_TYPES = [
 const DATABASES = [
   { key: 'none', label: 'No database', blurb: 'Just the app.' },
   { key: 'postgres', label: 'PostgreSQL', blurb: 'A relational database as a second service.' },
+  { key: 'mariadb', label: 'MariaDB / MySQL', blurb: 'A relational database as a second service, MySQL-compatible.' },
+  { key: 'sqlite', label: 'SQLite', blurb: 'A file inside the app container, kept on a volume. No second service.' },
   { key: 'redis', label: 'Redis', blurb: 'An in-memory store for caching, queues or sessions.' },
 ];
 const TARGETS = [

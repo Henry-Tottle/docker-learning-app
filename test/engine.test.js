@@ -8,7 +8,7 @@ const { lint, parseDockerfile } = require('../src/engine/linter');
 
 const COMBOS = [];
 for (const appType of ['node', 'django', 'static', 'generic'])
-  for (const database of ['none', 'postgres', 'redis'])
+  for (const database of ['none', 'postgres', 'mariadb', 'sqlite', 'redis'])
     for (const target of ['dev', 'prod']) COMBOS.push({ appType, database, target });
 
 test('every preset combination generates three files with unique ids and known concepts', () => {
@@ -18,7 +18,7 @@ test('every preset combination generates three files with unique ids and known c
     const ids = gen.allLines(g).filter((l) => l.id).map((l) => l.id);
     assert.equal(new Set(ids).size, ids.length, 'duplicate ids in ' + JSON.stringify(answers));
     for (const l of gen.allLines(g)) if (l.concept) assert.ok(CONCEPT_MAP[l.concept], `unknown concept ${l.concept}`);
-    assert.ok(g.concepts.length >= 5, 'too few concepts for ' + JSON.stringify(answers));
+    assert.ok(g.concepts.length >= 4, 'too few concepts for ' + JSON.stringify(answers));
   }
 });
 
@@ -148,4 +148,39 @@ test('every concept is reachable from at least one preset', () => {
   const seen = new Set();
   for (const answers of COMBOS) for (const k of gen.generate(answers).concepts) seen.add(k);
   for (const c of CONCEPTS) assert.ok(seen.has(c.key), `concept ${c.key} is never taught`);
+});
+
+test('sqlite is a volume on the app, not a second service', () => {
+  for (const appType of ['node', 'django', 'generic']) {
+    for (const target of ['dev', 'prod']) {
+      const g = gen.generate({ appType, database: 'sqlite', target });
+      const compose = g.files[1].text;
+      assert.ok(!/^\s{2}db:/m.test(compose), `${appType}/${target} has a db service`);
+      assert.match(compose, /app-data:\/app\/data/);
+      assert.match(compose, /^volumes:\n  app-data:/m);
+      assert.match(g.files[0].text, /ENV DATABASE_PATH=\/app\/data\//);
+      if (target === 'prod') assert.match(g.files[0].text, /RUN mkdir -p \/app\/data && chown/);
+      assert.ok(!g.concepts.includes('compose-networking'), 'sqlite should not require compose networking');
+      assert.ok(g.concepts.includes('volumes-vs-bind-mounts'));
+    }
+  }
+});
+
+test('mariadb is a second service with mysql-compatible URL and image alternatives accepted', () => {
+  const g = gen.generate({ appType: 'django', database: 'mariadb', target: 'prod' });
+  assert.match(g.files[1].text, /image: mariadb:11\.4/);
+  assert.match(g.files[0].text, /default-libmysqlclient-dev/);
+  assert.match(g.files[0].text, /libmariadb3/);
+  const dev = gen.generate({ appType: 'node', database: 'mariadb', target: 'dev' });
+  assert.equal(checkBlank(gen.findLine(dev, 'c-db-url'), 'mariadb://u:p@db:3306/app').correct, true);
+  assert.equal(checkBlank(gen.findLine(dev, 'c-db-image'), 'mysql:8.4').correct, true);
+  assert.match(checkBlank(gen.findLine(dev, 'c-db-image'), 'mariadb').why, /latest/);
+});
+
+test('linter: sqlite without a volume or data-dir prep is caught', () => {
+  const answers = { appType: 'node', database: 'sqlite', target: 'prod' };
+  const r = lint({ dockerfile: 'FROM node:22-slim\nWORKDIR /app\nCOPY package.json ./\nRUN npm ci\nCOPY . .\nUSER node\nEXPOSE 3000\nCMD ["node","server.js"]\n', compose: 'services:\n  app:\n    build: .\n    ports:\n      - "3000:3000"\n', dockerignore: '.env\nnode_modules' }, answers);
+  assert.ok(r.findings.some((f) => /nothing creates that folder/.test(f.message)));
+  assert.ok(r.findings.some((f) => /deleted with the container/.test(f.message)));
+  assert.ok(r.findings.some((f) => /SQLite file .* not ignored/.test(f.message)));
 });

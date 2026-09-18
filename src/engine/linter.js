@@ -133,6 +133,13 @@ function lintDockerfile(text, answers) {
     if (answers.appType === 'django' && /runserver/.test(c.args) && !/0\.0\.0\.0/.test(c.args)) add('error', 'expose-vs-publish', 'runserver without an address binds 127.0.0.1, which refuses the traffic compose forwards in.', 'Tell runserver to listen on all interfaces.');
   }
 
+  // SQLite: the data folder must exist and belong to the non-root user.
+  if (answers.database === 'sqlite' && answers.target === 'prod' && lastUser && !/^root$|^0$/.test(lastUser.args)) {
+    const prep = runs.find((r) => /mkdir/.test(r.args) && /chown/.test(r.args) && r.line < lastUser.line);
+    if (!prep) add('error', 'non-root-user', 'SQLite writes to a folder inside the container, but nothing creates that folder and hands it to the non-root user before USER.', 'Who owns the directory a volume gets mounted on? What can still run as root at that point in the file?');
+    else add('ok', 'non-root-user', 'Data directory is created and owned by the app user before switching users.');
+  }
+
   // Hygiene
   if (runs.some((r) => /apt-get install/.test(r.args) && !/rm -rf \/var\/lib\/apt\/lists/.test(r.args))) add('warn', 'layer-caching', 'apt-get install without cleaning /var/lib/apt/lists in the same RUN leaves package indexes in the layer.', 'Anything created and deleted in different RUN steps still exists in the earlier layer.');
   if (runs.some((r) => /apt-get (upgrade|dist-upgrade)/.test(r.args))) add('warn', 'base-images', 'apt-get upgrade in a Dockerfile makes builds non-reproducible.', 'Get a newer base image instead; that is what the tag is for.');
@@ -194,7 +201,7 @@ function lintCompose(text, answers) {
 
   if (db) {
     if (/localhost|127\.0\.0\.1/.test(app)) add('error', 'compose-networking', 'The app is configured to reach the database at localhost, which inside its container is itself.', 'What hostname does compose give every service?');
-    const dbSvc = services.find((s) => s === db.service) || services.find((s) => new RegExp(`image\\s*:\\s*${answers.database}`).test(block(s)));
+    const dbSvc = services.find((s) => s === db.service) || services.find((s) => new RegExp(`image\\s*:\\s*(${db.imageNames.join('|')})`).test(block(s)));
     if (!dbSvc) add('error', 'compose-networking', `No service runs ${answers.database}.`, 'The database is a second container: another entry under services: using the official image.');
     else {
       const d = block(dbSvc);
@@ -228,6 +235,18 @@ function lintCompose(text, answers) {
     }
   }
 
+  if (answers.database === 'sqlite') {
+    const volMatch = app.match(/volumes\s*:\s*\n((?:\s+-.*\n?)+)/);
+    const named = volMatch && (volMatch[1].match(/-\s*"?([a-z][\w-]*):(\S+?)"?\s*$/m) || []);
+    if (services.some((s) => /^(db|postgres|mariadb|mysql|sqlite)$/.test(s))) add('warn', 'compose-networking', 'There is a database service, but SQLite is a library inside the app, not a server. Nothing would connect to that container.', 'What does the app actually need in order to keep its SQLite file safe?');
+    if (!volMatch) add('error', 'volumes-vs-bind-mounts', `"${appName}" mounts nothing, so the SQLite file is deleted with the container.`, 'The container filesystem is disposable. What kind of storage does Docker manage for you?');
+    else if (!named) add('warn', 'volumes-vs-bind-mounts', `"${appName}" has mounts but no named volume, so the database file lives on a bind mount in your project tree.`, 'Fine on Linux, but easy to commit or COPY by accident. What keeps data out of the source tree entirely?');
+    else {
+      add('ok', 'volumes-vs-bind-mounts', `SQLite data is on the named volume "${named[1]}".`);
+      if (!new RegExp(`^volumes\\s*:[\\s\\S]*^\\s{2}${named[1]}\\s*:`, 'm').test(src)) add('error', 'volumes-vs-bind-mounts', `Named volume "${named[1]}" is used but not declared under the top-level volumes: key.`, 'compose needs to know which storage to create.');
+    }
+  }
+
   if (answers.target === 'dev') {
     if (!/volumes\s*:/.test(app)) add('warn', 'volumes-vs-bind-mounts', `Dev target but "${appName}" mounts nothing, so every edit needs a rebuild.`, 'What kind of mount makes your working folder appear inside the container?');
     else if (answers.appType === 'node' && /-\s*"?\.\/?:/.test(app) && !/-\s*"?\/app\/node_modules"?\s*$/m.test(app)) add('warn', 'volumes-vs-bind-mounts', 'The bind mount will shadow the container\'s node_modules with the copy from your machine.', 'An extra volume entry with only a container path keeps the container\'s own copy.');
@@ -247,6 +266,7 @@ function lintDockerignore(text, answers) {
   else add('ok', '.env is kept out of the image.');
   if (!covers('.git')) add('warn', '.git is not ignored; the whole history is sent to the builder on every build.');
   if (answers.appType === 'node' && !covers('node_modules')) add('error', 'node_modules is not ignored. Sending it is slow and native modules built on your OS will not run in the container.', 'The image installs its own copy anyway.');
+  if (answers.database === 'sqlite' && !(covers('app.db') || covers('db.sqlite3') || covers('data') || entries.some((e) => /\*\.(db|sqlite3?)$/.test(e)))) add('warn', 'A local SQLite file (*.db, *.sqlite3) is not ignored; a copy would be baked into the image, stale from day one.');
   if (answers.appType === 'django' && !(covers('__pycache__') || covers('*.pyc'))) add('warn', 'Python bytecode (__pycache__) is not ignored.');
   if (answers.appType === 'django' && !(covers('.venv') || covers('venv'))) add('warn', 'A local virtualenv (.venv) would be copied in; it holds binaries for your OS.');
   return F;
