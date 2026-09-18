@@ -22,12 +22,6 @@
   <% }) %>
 </div>
 
-<script>
-  window.GUIDED = {
-    projectId: <%= project.id %>,
-    files: <%- JSON.stringify(generated.files.map((f) => ({ name: f.name, text: f.text }))) %>,
-    conceptStatus: <%- JSON.stringify(Object.fromEntries(generated.concepts.map((k) => [k, conceptStatus(k)]))) %>
-  };
-</script>
+<script type="application/json" id="page-config"><%- jsonForScript({ projectId: project.id, files: generated.files.map((f) => ({ name: f.name, text: f.text })), conceptStatus: Object.fromEntries(generated.concepts.map((k) => [k, conceptStatus(k)])) }) %></script>
 <script src="/js/guided.js"></script>
 <%- include('partials/footer') %>

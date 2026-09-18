@@ -10,4 +10,11 @@
   <button class="button primary" type="submit">Change password</button>
 </form>
 <p class="muted">Changing it logs out every other device.</p>
+
+<h2>Delete account</h2>
+<p class="muted">Removes your projects, quiz history and mastery. Not reversible.</p>
+<form method="post" action="/account/delete" class="wizard auth-form danger-zone" data-confirm="Delete your account and everything in it? This cannot be undone.">
+  <label class="field"><span>Confirm with your password</span><input name="password" type="password" autocomplete="current-password" required></label>
+  <button class="button subtle" type="submit">Delete my account</button>
+</form>
 <%- include('partials/footer') %>

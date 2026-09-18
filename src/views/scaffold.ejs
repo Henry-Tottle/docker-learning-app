@@ -56,6 +56,6 @@
   <% }) %>
 </div>
 
-<script>window.SCAFFOLD = { projectId: <%= project.id %> };</script>
+<script type="application/json" id="page-config"><%- jsonForScript({ projectId: project.id }) %></script>
 <script src="/js/scaffold.js"></script>
 <%- include('partials/footer') %>

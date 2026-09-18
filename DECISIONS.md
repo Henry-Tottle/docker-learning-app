@@ -446,3 +446,45 @@ actually consults.
   today, including the `RAILWAY_RUN_UID=0` workaround for volumes that are not writable
   by a non-root user. I have not run this deployment, and the README says so rather than
   implying otherwise.
+
+## 024 — Password reset without email, scrypt cost, self-delete, security headers
+
+**Reset flow: admin-issued one-time code.** The app stores no email addresses, on
+purpose, so the usual "we sent you a link" flow is not available. Instead an admin
+presses Reset on the Users page, the app generates a 16-character code from an alphabet
+with no look-alike characters (no 0/O, 1/I/L), stores only its SHA-256 with a one-hour
+expiry, and renders the code once. It is rendered, not redirected to, so it never appears
+in a URL, browser history or access log. The user enters username, code and a new
+password at `/reset`; on success the code is marked used, the password is re-hashed and
+every session for that account is revoked. Wrong code, wrong username and expired code
+all produce the same message so the page cannot be used to probe accounts, and reset
+attempts share the login rate limiter. Issuing a new code voids the previous one, so at
+most one live code exists per user. The table is shaped so an email-based self-service
+flow could reuse it later by adding a sender and an optional email column.
+
+**Rejected:** letting the admin type a temporary password. Simpler, but the admin would
+know the user's password until they changed it, and nothing would force the change.
+
+**Scrypt cost raised from 2^14 to 2^17**, OWASP's current recommendation. Node needs the
+`maxmem` option raised above 128 MiB for that cost or it refuses to run. Existing hashes
+record their own cost in the stored string, so verification still works; on the next
+successful login the hash is transparently rewritten at the new cost. Nobody is locked out
+and nobody notices. The test suite got about six seconds slower, which is the honest price
+of a hash that takes a real fraction of a second per attempt.
+
+**Self-delete** on the account page, confirmed with the current password. The last admin
+cannot delete themselves, for the same reason they cannot be demoted: the deployment would
+become unmanageable. Cascades remove projects and progress.
+
+**Security headers, and what they forced.** A `Content-Security-Policy` with
+`script-src 'self'` forbids inline scripts and inline event handlers entirely. The pages
+had both: `<script>window.GUIDED = {...}</script>` blocks carrying page data, and
+`onsubmit="return confirm(...)"` on delete forms. Rather than weaken the policy with
+`'unsafe-inline'`, which would make it nearly pointless, the data now travels in
+`<script type="application/json">` blocks, which browsers never execute, and the handlers
+moved to a small `ui.js` that reads `data-confirm` / `data-autosubmit` attributes. The
+JSON is emitted through a helper that escapes `<`, so a `</script>` inside user content
+(a project named that, say) cannot break out of the block. Inline `style` attributes are
+still allowed, because the progress bars use them and inline styles are not a script
+execution vector. A test now fetches every page type and fails if any executable inline
+script or `on*=` handler reappears.

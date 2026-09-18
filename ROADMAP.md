@@ -3,33 +3,7 @@
 Agreed items are ready to build. Proposed items are written up so the reasoning is
 visible before anyone commits to them. Completed items move to DECISIONS.md.
 
-## 1. Password reset and account hardening (agreed)
-
-**Admin-issued one-time reset code.** No email infrastructure; fits an invite-only
-deployment where the admin already has a way to reach each user.
-
-- New table `password_resets(user_id, code_hash, expires_at, created_by, used_at)`.
-  Shaped so a future email-based self-service flow can reuse it.
-- Admin Users page gets a **Reset password** action. The app generates a random code,
-  stores its SHA-256 with a one-hour expiry, and shows the code to the admin once.
-- New public page `/reset`: username, code, new password. On success the code is marked
-  used, the password is re-hashed, and every session for that account is revoked.
-  Wrong or expired codes get the same generic message, and reset attempts go through the
-  same rate limiter as login.
-- The login page gets a "Forgot your password? Ask an admin for a reset code" link.
-- The admin never learns the new password.
-
-**Scrypt cost 2^14 → 2^17** (OWASP's current recommendation), with `maxmem` raised to
-suit. Existing hashes keep their recorded cost and are re-hashed transparently on the
-next successful login, so nobody is locked out and nobody has to do anything.
-
-**Self-delete on the account page.** The admin page already points users there; the
-button does not exist yet. Requires the current password, refuses if this is the last
-admin, and deletes projects and progress with the account.
-
-**Small extras while in there:** a few security headers (`X-Content-Type-Options`,
-`Referrer-Policy`, a conservative `Content-Security-Policy`), and a note in the README
-that volume backups contain password hashes.
+## 1. Password reset and account hardening (done, see DECISIONS #024)
 
 ## 2. "Where do these files go, and what if I have no project yet?" (proposed)
 

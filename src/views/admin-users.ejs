@@ -2,15 +2,22 @@
 <h1>Users</h1>
 <p class="muted">Registration mode: <code><%= mode %></code> (set with the <code>REGISTRATION_MODE</code> environment variable: open, invite or closed).</p>
 <% if (flash) { %><div class="flash ok"><%= flash %></div><% } %>
+<% if (reset) { %>
+  <div class="flash warn">
+    <strong>Reset code for <%= reset.username %>.</strong> Shown once; it is not stored and cannot be retrieved. Send it to them however you normally talk. It expires in <%= reset.minutes %> minutes, and issuing another replaces it.
+    <p class="reset-code"><code id="reset-code"><%= reset.code %></code> <button class="button tiny" type="button" data-copy="reset-code">Copy</button></p>
+    <p class="muted">They enter it at <code>/reset</code> with their username and a new password.</p>
+  </div>
+<% } %>
 <table class="table">
   <thead><tr><th>User</th><th>Role</th><th>Projects</th><th>Mastered</th><th>Joined</th><th>Last login</th><th></th></tr></thead>
   <tbody>
     <% users.forEach((u) => { %>
       <tr>
-        <td><%= u.username %><%= u.id === user.id ? ' (you)' : '' %></td>
+        <td><%= u.username %><%= u.id === user.id ? ' (you)' : '' %><% if (u.pending_reset) { %> <span class="pill unlocked" title="An unused reset code exists">reset pending</span><% } %></td>
         <td>
           <form method="post" action="/admin/users/<%= u.id %>/role" class="inline">
-            <select name="role" onchange="this.form.submit()">
+            <select name="role" data-autosubmit>
               <option value="user" <%= u.role === 'user' ? 'selected' : '' %>>user</option>
               <option value="admin" <%= u.role === 'admin' ? 'selected' : '' %>>admin</option>
             </select>
@@ -20,9 +27,12 @@
         <td><%= u.mastered %></td>
         <td class="muted"><%= u.created_at %></td>
         <td class="muted"><%= u.last_login_at || 'never' %></td>
-        <td>
+        <td class="actions">
+          <form method="post" action="/admin/users/<%= u.id %>/reset" class="inline" data-confirm="Issue a one-time password reset code for <%= u.username %>?">
+            <button class="button tiny" type="submit">Reset password</button>
+          </form>
           <% if (u.id !== user.id) { %>
-            <form method="post" action="/admin/users/<%= u.id %>/delete" class="inline" onsubmit="return confirm('Delete <%= u.username %> and all their projects and progress?')">
+            <form method="post" action="/admin/users/<%= u.id %>/delete" class="inline" data-confirm="Delete <%= u.username %> and all their projects and progress?">
               <button class="button tiny subtle" type="submit">Delete</button>
             </form>
           <% } %>

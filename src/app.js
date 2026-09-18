@@ -23,6 +23,20 @@ function createApp(options = {}) {
   app.locals.auth = auth;
   app.locals.concepts = CONCEPTS;
 
+  // Security headers. The CSP allows no inline scripts: page data reaches
+  // client scripts through <script type="application/json"> blocks, which the
+  // browser never executes. Inline style attributes (progress bars) are allowed.
+  app.use((req, res, next) => {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'");
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'DENY');
+    next();
+  });
+  // JSON safe to embed in an HTML script block: "<" is escaped so "</script>"
+  // inside user data cannot end the block early.
+  app.locals.jsonForScript = (v) => JSON.stringify(v).replace(/</g, '\\u003c');
+
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json({ limit: '200kb' }));
   app.use(express.static(path.join(__dirname, '..', 'public')));

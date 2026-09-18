@@ -71,10 +71,14 @@ automatically. (If you prefer the shell: `PORT=3001 npm start` in bash/zsh,
   (`/admin/users`) to change roles and delete accounts. Nobody can remove the last admin.
 - `REGISTRATION_MODE` controls who can sign up: `open` (default), `invite` (requires
   `INVITE_CODE`), or `closed` (nobody, except the very first account).
-- Passwords are hashed with scrypt; sessions are random tokens in HttpOnly, SameSite=Lax
-  cookies, stored hashed in the database, valid for 30 days. Ten failed logins in fifteen
-  minutes locks that username for that client. Changing your password logs out every other
-  device.
+- Passwords are hashed with scrypt at OWASP's recommended cost; sessions are random tokens
+  in HttpOnly, SameSite=Lax cookies, stored hashed in the database, valid for 30 days. Ten
+  failed logins in fifteen minutes locks that username for that client. Changing your
+  password logs out every other device. Users can delete their own account.
+- **Forgot password:** no email is stored, so an admin issues a one-time reset code from
+  the Users page (valid one hour, shown once) and passes it to the user, who enters it at
+  `/reset` with a new password. The admin never learns the new password.
+- Backups of the `/data` volume contain password hashes. Treat them as sensitive.
 
 ## Deploying to Railway
 

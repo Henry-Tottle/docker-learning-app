@@ -8,7 +8,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const Database = require('better-sqlite3');
 
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 // Tables that did not exist before accounts. Safe to create on any file.
 const ACCOUNT_SCHEMA = `
@@ -32,9 +32,21 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_agent  TEXT
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+
+-- One-time password reset codes issued by an admin. Only the hash is stored.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash   TEXT NOT NULL,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS password_resets_user ON password_resets(user_id);
 `;
 
-// The learning-state tables in their current (v1) shape.
+// The learning-state tables in their current (v2) shape.
 const LEARNING_SCHEMA = `
 CREATE TABLE IF NOT EXISTS projects (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,6 +55,7 @@ CREATE TABLE IF NOT EXISTS projects (
   app_type    TEXT NOT NULL,     -- node | django | static | generic
   database    TEXT NOT NULL,     -- postgres | mariadb | sqlite | redis | none
   target      TEXT NOT NULL,     -- dev | prod
+  start       TEXT NOT NULL DEFAULT 'existing',  -- existing | fresh
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS projects_user ON projects(user_id);
@@ -141,6 +154,12 @@ INSERT INTO concept_progress (user_id, concept, status, best_score, attempts, ma
 DROP TABLE concept_progress_v0;
 `;
 
+// Version 1 -> 2. password_resets is in ACCOUNT_SCHEMA (idempotent), so only
+// the new projects column is needed here.
+const MIGRATE_1_TO_2 = `
+ALTER TABLE projects ADD COLUMN start TEXT NOT NULL DEFAULT 'existing';
+`;
+
 function tableExists(db, name) {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
 }
@@ -154,8 +173,10 @@ function migrate(db) {
   try {
     db.transaction(() => {
       db.exec(ACCOUNT_SCHEMA);
-      if (legacy) db.exec(MIGRATE_0_TO_1);
-      else db.exec(LEARNING_SCHEMA);
+      let at = version;
+      if (legacy) { db.exec(MIGRATE_0_TO_1); at = 1; }
+      else if (at === 0) { db.exec(LEARNING_SCHEMA); at = CURRENT_VERSION; }
+      if (at < 2) { db.exec(MIGRATE_1_TO_2); at = 2; }
       // Unclaimed legacy rows carry user_id 0 until the first account adopts
       // them (auth.js claimLegacyData); that is the one violation we expect.
       const violations = db.pragma('foreign_key_check').filter((v) => !(v.table === 'projects' && v.parent === 'users'));

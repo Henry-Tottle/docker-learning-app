@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const Database = require('better-sqlite3');
-const { openDatabase } = require('../src/db');
+const { openDatabase, CURRENT_VERSION } = require('../src/db');
 const { hashPassword, verifyPassword } = require('../src/services/auth');
 const { startApp } = require('./helpers');
 
@@ -160,7 +160,8 @@ test('a pre-accounts (v0) database migrates and its data goes to the first accou
   v0.close();
 
   const db = openDatabase(file);
-  assert.equal(db.pragma('user_version', { simple: true }), 1);
+  assert.equal(db.pragma('user_version', { simple: true }), CURRENT_VERSION);
+  assert.equal(db.prepare('SELECT start FROM projects').get().start, 'existing', 'v2 column added with its default');
   const t = await startApp({ db });
   try {
     const a = t.client();
@@ -178,4 +179,117 @@ test('a pre-accounts (v0) database migrates and its data goes to the first accou
     const b = t.client(); await b.register('bob');
     assert.doesNotMatch(await (await b.get('/')).text(), /old one/);
   } finally { t.close(); db.close(); fs.rmSync(path.dirname(file), { recursive: true, force: true }); }
+});
+
+test('admin-issued reset code: one use, one hour, revokes sessions, generic failure', async () => {
+  const t = await startApp();
+  try {
+    const a = t.client(); await a.register('alice');
+    const b = t.client(); await b.register('bob');
+    const bOther = t.client(); await bOther.login('bob');
+
+    // Only admins can issue codes.
+    assert.equal((await b.form('/admin/users/1/reset', {})).status, 403);
+
+    const issued = await a.form('/admin/users/2/reset', {});
+    assert.equal(issued.status, 200);
+    const html = await issued.text();
+    const code = (html.match(/id="reset-code">([A-Z2-9-]{19})</) || [])[1];
+    assert.ok(code, 'code shown once on the page');
+    assert.match(html, /reset pending/);
+    assert.equal(t.app.locals.db.prepare('SELECT COUNT(*) AS n FROM password_resets WHERE code_hash = ?').get(code).n, 0, 'plain code is not stored');
+
+    // Wrong code and wrong user are the same generic error; the reset page is public.
+    const r = t.client();
+    assert.equal((await r.get('/reset')).status, 200);
+    const bad = await r.form('/reset', { username: 'bob', code: 'AAAA-BBBB-CCCC-DDDD', password: 'brand-new-password' });
+    assert.equal(bad.status, 400);
+    assert.match(await bad.text(), /not valid for that username, or it has expired/);
+    const wrongUser = await r.form('/reset', { username: 'alice', code, password: 'brand-new-password' });
+    assert.equal(wrongUser.status, 400);
+    assert.equal((await r.form('/reset', { username: 'bob', code, password: 'short' })).status, 400, 'password rules apply');
+
+    // Right code, lower-case with spaces: normalised.
+    const ok = await r.form('/reset', { username: 'BOB', code: code.toLowerCase().replace(/-/g, ' '), password: 'brand-new-password' });
+    assert.equal(ok.status, 302);
+    assert.match(ok.headers.get('location'), /reset=1/);
+    assert.equal((await bOther.get('/dashboard')).status, 302, 'old sessions revoked');
+    assert.equal((await r.login('bob', 'correct horse battery')).status, 401, 'old password gone');
+    assert.equal((await r.login('bob', 'brand-new-password')).status, 302);
+    assert.equal((await t.client().form('/reset', { username: 'bob', code, password: 'another-new-password' })).status, 400, 'single use');
+
+    // Expiry: issue, then age the row.
+    await a.form('/admin/users/2/reset', {});
+    t.app.locals.db.prepare("UPDATE password_resets SET expires_at = datetime('now', '-1 minute') WHERE user_id = 2 AND used_at IS NULL").run();
+    const expired = await t.client().form('/reset', { username: 'bob', code: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ', password: 'yet-another-password' });
+    assert.equal(expired.status, 400);
+
+    // Reset attempts are rate limited like logins.
+    const spam = t.client();
+    for (let i = 0; i < 10; i++) await spam.form('/reset', { username: 'bob', code: 'AAAA-AAAA-AAAA-AAAA', password: 'whatever-password' });
+    assert.match(await (await spam.form('/reset', { username: 'bob', code: 'AAAA-AAAA-AAAA-AAAA', password: 'whatever-password' })).text(), /Too many failed attempts/);
+  } finally { t.close(); }
+});
+
+test('older, cheaper scrypt hashes are upgraded on login', async () => {
+  const { SCRYPT } = require('../src/services/auth');
+  const t = await startApp();
+  try {
+    const db = t.app.locals.db;
+    const crypto = require('node:crypto');
+    const salt = crypto.randomBytes(16);
+    const old = crypto.scryptSync('legacy-password', salt, 64, { N: 16384, r: 8, p: 1 });
+    db.prepare("INSERT INTO users (username, password_hash, role) VALUES ('old', ?, 'user')").run(`scrypt$16384$${salt.toString('base64')}$${old.toString('base64')}`);
+    const c = t.client();
+    assert.equal((await c.login('old', 'wrong-password-here')).status, 401);
+    assert.match(db.prepare("SELECT password_hash FROM users WHERE username = 'old'").get().password_hash, /^scrypt\$16384\$/, 'untouched after a failed login');
+    assert.equal((await c.login('old', 'legacy-password')).status, 302);
+    assert.match(db.prepare("SELECT password_hash FROM users WHERE username = 'old'").get().password_hash, new RegExp(`^scrypt\\$${SCRYPT.N}\\$`), 'rehashed at the current cost');
+    assert.equal((await c.get('/dashboard')).status, 200, 'session from that login still valid');
+    assert.equal((await t.client().login('old', 'legacy-password')).status, 302, 'password unchanged');
+  } finally { t.close(); }
+});
+
+test('users can delete their own account, but not the last admin', async () => {
+  const t = await startApp();
+  try {
+    const a = t.client(); await a.register('alice');
+    const wrong = await a.form('/account/delete', { password: 'nope-nope-nope' });
+    assert.equal(wrong.status, 400);
+    const last = await a.form('/account/delete', { password: 'correct horse battery' });
+    assert.equal(last.status, 400);
+    assert.match(await last.text(), /only admin/);
+
+    const b = t.client(); await b.register('bob');
+    const created = await b.form('/wizard', { name: 'gone soon', appType: 'node', database: 'none', target: 'dev' });
+    assert.equal(created.status, 302);
+    const bye = await b.form('/account/delete', { password: 'correct horse battery' });
+    assert.equal(bye.status, 302);
+    assert.equal(b.cookie, '', 'cookie cleared');
+    assert.equal((await t.client().login('bob')).status, 401);
+    assert.equal(t.app.locals.db.prepare("SELECT COUNT(*) AS n FROM projects WHERE name = 'gone soon'").get().n, 0, 'projects cascade');
+  } finally { t.close(); }
+});
+
+test('security headers are set and no page ships inline scripts', async () => {
+  const t = await startApp();
+  try {
+    const c = t.client(); await c.register('alice');
+    const created = await c.form('/wizard', { name: 'p', appType: 'django', database: 'postgres', target: 'prod' });
+    const p = new URL(created.headers.get('location'), t.base).pathname;
+    for (const path of ['/', '/account', p, p + '/guided', p + '/scaffold', p + '/free', '/admin/users', '/how-this-app-was-containerized']) {
+      const r = await c.get(path);
+      assert.equal(r.status, 200, path);
+      assert.match(r.headers.get('content-security-policy'), /script-src 'self';/);
+      assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+      const html = await r.text();
+      const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)];
+      for (const [, attrs, body] of scripts) {
+        if (/src=/.test(attrs)) continue;
+        assert.match(attrs, /type="application\/json"/, `${path} has an executable inline script`);
+        assert.ok(!body.includes('</'), `${path} JSON block contains an unescaped closing tag`);
+      }
+      assert.ok(!/\son(click|submit|change|load)=/.test(html), `${path} has an inline event handler`);
+    }
+  } finally { t.close(); }
 });

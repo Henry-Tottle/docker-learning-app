@@ -1,5 +1,5 @@
 (function () {
-  var cfg = window.GUIDED;
+  var cfg = JSON.parse(document.getElementById('page-config').textContent);
   var gate = document.getElementById('gate');
   var bar = document.getElementById('gate-bar');
   var count = document.getElementById('viewed-count');

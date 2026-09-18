@@ -1,5 +1,6 @@
 <%- include('partials/header') %>
 <h1>Log in</h1>
+<% if (notice) { %><div class="flash ok"><%= notice %></div><% } %>
 <% if (error) { %><div class="flash error"><%= error %></div><% } %>
 <form method="post" action="/login" class="wizard auth-form">
   <input type="hidden" name="next" value="<%= next %>">
@@ -7,5 +8,6 @@
   <label class="field"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label>
   <button class="button primary" type="submit">Log in</button>
 </form>
+<p class="muted"><a href="/reset">Forgot your password?</a> Ask an admin for a reset code, then use it there.</p>
 <% if (registrationMode !== 'closed') { %><p class="muted">No account yet? <a href="/register">Create one.</a></p><% } %>
 <%- include('partials/footer') %>

@@ -1,5 +1,5 @@
 (function () {
-  var cfg = window.SCAFFOLD;
+  var cfg = JSON.parse(document.getElementById('page-config').textContent);
   var bar = document.getElementById('fill-bar');
   var count = document.getElementById('fill-count');
   var done = document.getElementById('fill-done');

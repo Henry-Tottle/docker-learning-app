@@ -54,6 +54,6 @@
   </ul>
 <% } %>
 
-<script>window.FREE = { projectId: <%= project.id %>, unlocked: <%= status.unlocked %> };</script>
+<script type="application/json" id="page-config"><%- jsonForScript({ projectId: project.id, unlocked: status.unlocked }) %></script>
 <script src="/js/free.js"></script>
 <%- include('partials/footer') %>

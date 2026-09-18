@@ -1,0 +1,12 @@
+<%- include('partials/header') %>
+<h1>Reset your password</h1>
+<p class="lede">There is no email on file for anyone, on purpose. An administrator can issue you a one-time code from the Users page; it works for one hour. Enter it here with a new password. Every device logged in as you will be logged out.</p>
+<% if (error) { %><div class="flash error"><%= error %></div><% } %>
+<form method="post" action="/reset" class="wizard auth-form">
+  <label class="field"><span>Username</span><input name="username" value="<%= username %>" autocomplete="username" required autofocus></label>
+  <label class="field"><span>Reset code</span><input name="code" autocomplete="one-time-code" placeholder="XXXX-XXXX-XXXX-XXXX" required spellcheck="false"></label>
+  <label class="field"><span>New password</span><input name="password" type="password" autocomplete="new-password" required minlength="8"></label>
+  <button class="button primary" type="submit">Set new password</button>
+</form>
+<p class="muted">Remembered it after all? <a href="/login">Log in.</a></p>
+<%- include('partials/footer') %>

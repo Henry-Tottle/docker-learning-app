@@ -1,5 +1,5 @@
 (function () {
-  var cfg = window.FREE;
+  var cfg = JSON.parse(document.getElementById('page-config').textContent);
   if (!cfg.unlocked) return;
   var btn = document.getElementById('run-check');
   var status = document.getElementById('check-status');

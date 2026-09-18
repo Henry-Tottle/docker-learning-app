@@ -51,7 +51,7 @@
   <% }) %>
 </ul>
 
-<form method="post" action="/projects/<%= project.id %>/delete" class="danger-zone" onsubmit="return confirm('Delete this project and its progress? Concept mastery is kept.')">
+<form method="post" action="/projects/<%= project.id %>/delete" class="danger-zone" data-confirm="Delete this project and its progress? Concept mastery is kept.">
   <button class="button subtle" type="submit">Delete project</button>
 </form>
 <%- include('partials/footer') %>
