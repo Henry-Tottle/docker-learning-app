@@ -41,6 +41,16 @@
     <% }) %>
   </fieldset>
 
+  <fieldset>
+    <legend>Do you already have a project?</legend>
+    <% starts.forEach((s) => { %>
+      <label class="choice">
+        <input type="radio" name="start" value="<%= s.key %>" <%= values.start === s.key ? 'checked' : '' %>>
+        <span><strong><%= s.label %></strong><br><small><%= s.blurb %></small></span>
+      </label>
+    <% }) %>
+  </fieldset>
+
   <p class="muted" id="preview">Loading preview…</p>
   <button class="button primary" type="submit">Generate my files</button>
 </form>

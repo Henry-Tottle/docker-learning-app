@@ -1,7 +1,7 @@
 <%- include('partials/header') %>
 <p class="crumbs"><a href="/">Projects</a> › <a href="/projects/<%= project.id %>"><%= project.name %></a> › Guided build</p>
 <h1>Guided build</h1>
-<p class="lede">Click any highlighted line to see why it is there. The files unlock for copying once you have opened every explanation: <span id="viewed-count"><%= status.viewed %></span> of <%= status.total %> so far.</p>
+<p class="lede">Click any highlighted line to see why it is there. The files unlock for copying once you have opened every explanation: <span id="viewed-count"><%= status.viewed %></span> of <%= status.total %> so far. <a href="#usage">Where do these files go?</a></p>
 
 <div class="sticky-status" id="gate" data-complete="<%= status.complete %>">
   <div class="bar small"><div class="bar-fill" id="gate-bar" style="width: <%= Math.round(status.viewed / status.total * 100) %>%"></div></div>
@@ -22,6 +22,20 @@
   <% }) %>
 </div>
 
-<script type="application/json" id="page-config"><%- jsonForScript({ projectId: project.id, files: generated.files.map((f) => ({ name: f.name, text: f.text })), conceptStatus: Object.fromEntries(generated.concepts.map((k) => [k, conceptStatus(k)])) }) %></script>
+<section class="usage" id="usage">
+  <h2>Using these files</h2>
+  <ol class="usage-steps">
+    <% generated.usage.forEach((step) => { %>
+      <li>
+        <h3><%= step.title %></h3>
+        <p><%= step.body %></p>
+        <% if (step.code) { %><pre class="usage-code"><%= step.code %></pre><% } %>
+        <% step.notes.forEach((n) => { %><p class="muted note"><%= n %></p><% }) %>
+      </li>
+    <% }) %>
+  </ol>
+</section>
+
+<script type="application/json" id="page-config"><%- jsonForScript({ projectId: project.id, header: generated.usageHeader, files: generated.files.map((f) => ({ name: f.name, text: f.text })), conceptStatus: Object.fromEntries(generated.concepts.map((k) => [k, conceptStatus(k)])) }) %></script>
 <script src="/js/guided.js"></script>
 <%- include('partials/footer') %>

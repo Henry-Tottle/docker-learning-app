@@ -35,6 +35,7 @@ keys everything on `id` and `concept`. One data model, three renderings, no drif
    │ presets/*.js ─► generator.js ─► annotated files        │
    │ concepts.js   (quizzes)        lines.js (blank check)  │
    │ linter.js     (Mode 3 checker) links.js (read-more)    │
+   │ bootstrap.js  (usage panel, getting-started file)      │
    └────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -64,6 +65,10 @@ Writing it once means the explanation is consistent across stacks.
 
 `concepts.js` holds the nine concepts, their summaries and quizzes. Every quiz option
 carries its own `why`, so grading returns an explanation for whatever was chosen.
+
+`bootstrap.js` produces the two things the files alone do not say: a "Using these
+files" panel (where to save them, how to run them) for every project, and a Getting
+started file for projects that do not exist yet. Both are plain functions of the answers.
 
 `linter.js` is the Mode 3 checker. It knows the wizard answers, so it can say "a Django
 app in this course listens on 8000" without knowing what the user wrote. Every finding

@@ -62,7 +62,7 @@ test('static sites ignore the database choice', () => {
 
 test('unknown answers fall back to safe defaults', () => {
   const g = gen.generate({ appType: 'cobol', database: 'oracle', target: 'staging' });
-  assert.deepEqual(g.answers, { appType: 'node', database: 'none', target: 'dev' });
+  assert.deepEqual(g.answers, { appType: 'node', database: 'none', target: 'dev', start: 'existing' });
 });
 
 test('the linter passes the generator\'s own output for real presets', () => {
@@ -183,4 +183,48 @@ test('linter: sqlite without a volume or data-dir prep is caught', () => {
   assert.ok(r.findings.some((f) => /nothing creates that folder/.test(f.message)));
   assert.ok(r.findings.some((f) => /deleted with the container/.test(f.message)));
   assert.ok(r.findings.some((f) => /SQLite file .* not ignored/.test(f.message)));
+});
+
+test('"starting fresh" adds a Getting started file; existing projects do not get one', () => {
+  for (const appType of ['node', 'django', 'static', 'generic']) {
+    for (const target of ['dev', 'prod']) {
+      const existing = gen.generate({ appType, database: 'none', target, start: 'existing' });
+      assert.equal(existing.files.length, 3);
+      assert.equal(existing.answers.start, 'existing');
+      const fresh = gen.generate({ appType, database: 'none', target, start: 'fresh' });
+      assert.equal(fresh.files.length, 4);
+      const boot = fresh.files[3];
+      assert.equal(boot.key, 'bootstrap');
+      assert.ok(boot.lines.filter((l) => l.explain).length >= 2, `${appType} bootstrap has explained steps`);
+      assert.match(boot.text, /docker compose up --build/);
+      if (appType !== 'static') assert.match(boot.text, /docker run --rm -v "\$PWD:\/app"/);
+      // The three real files are identical either way: bootstrap is additive.
+      for (let i = 0; i < 3; i++) assert.equal(fresh.files[i].text, existing.files[i].text);
+      assert.ok(!fresh.files.some((f) => f.key === 'bootstrap' && f.lines.some((l) => l.blank)), 'no blanks in bootstrap');
+    }
+  }
+  const dj = gen.generate({ appType: 'django', database: 'postgres', target: 'prod', start: 'fresh' });
+  assert.match(dj.files[3].text, /Django>=5\.1,<6\ngunicorn/);
+  assert.match(dj.files[3].text, /startproject config \./);
+  assert.match(dj.files[3].text, /psycopg/);
+  const nd = gen.generate({ appType: 'node', database: 'none', target: 'dev', start: 'fresh' });
+  assert.match(nd.files[3].text, /app\.listen\(3000, '0\.0\.0\.0'/);
+});
+
+test('usage steps name the files, the folder, the .env contents for prod, and the port', () => {
+  const g = gen.generate({ appType: 'django', database: 'postgres', target: 'prod', start: 'existing' });
+  assert.equal(g.usage[0].code, 'Dockerfile\ndocker-compose.yml\n.dockerignore');
+  assert.match(g.usage[0].body, /requirements\.txt/);
+  assert.ok(g.usage[0].notes.some((n) => /Dockerfile\.txt/.test(n)), 'Windows rename note');
+  const env = g.usage.find((s) => /\.env/.test(s.title));
+  assert.ok(env, 'prod + db needs a .env step');
+  assert.match(env.code, /DATABASE_URL=postgres:\/\/app:app@db:5432\/app/);
+  assert.match(env.code, /POSTGRES_PASSWORD=/);
+  assert.match(g.usage[g.usage.length - 1].notes[0], /localhost:8000/);
+  assert.match(g.usageHeader, /docker compose up --build/);
+
+  const st = gen.generate({ appType: 'static', database: 'none', target: 'dev' });
+  assert.equal(st.hostPort, 8080);
+  assert.match(st.usage[st.usage.length - 1].notes[0], /localhost:8080/);
+  assert.ok(!st.usage.some((s) => /\.env/.test(s.title)));
 });

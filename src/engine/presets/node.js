@@ -50,7 +50,7 @@ function build({ database, target }) {
         'df-manifest',
         'COPY ___ ./',
         'package.json package-lock.json',
-        'Only the dependency manifests are copied first, on purpose. Docker caches each instruction as a layer and reuses it while its inputs are unchanged. Copying the manifests alone means the npm install layer below survives edits to your source code and is only redone when dependencies change.',
+        'Only the dependency manifests are copied first, on purpose. Docker caches each instruction as a layer and reuses it while its inputs are unchanged. Copying the manifests alone means the npm install layer below survives edits to your source code and is only redone when dependencies change. No package.json yet? npm init creates it and the first npm install creates the lock file; see Getting started.',
         {
           concept: 'layer-caching',
           prompt: 'file(s) to copy',
@@ -148,7 +148,7 @@ function build({ database, target }) {
         'df-manifest',
         'COPY ___ ./',
         'package.json package-lock.json',
-        'Only the dependency manifests are copied first, on purpose. Docker caches each instruction as a layer and reuses it while its inputs are unchanged. Copying the manifests alone means the npm install layer below survives edits to your source code and is only redone when dependencies change.',
+        'Only the dependency manifests are copied first, on purpose. Docker caches each instruction as a layer and reuses it while its inputs are unchanged. Copying the manifests alone means the npm install layer below survives edits to your source code and is only redone when dependencies change. No package.json yet? npm init creates it and the first npm install creates the lock file; see Getting started.',
         {
           concept: 'layer-caching',
           prompt: 'file(s) to copy',

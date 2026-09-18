@@ -39,6 +39,13 @@ const DOCS = {
   redisImage: { href: 'https://hub.docker.com/_/redis', label: 'Official redis image' },
   trivy: { href: 'https://trivy.dev/latest/docs/', label: 'Trivy vulnerability scanner' },
   sqliteWal: { href: 'https://www.sqlite.org/wal.html', label: 'SQLite write-ahead logging' },
+  pipRequirements: { href: 'https://pip.pypa.io/en/stable/reference/requirements-file-format/', label: 'pip: requirements file format' },
+  dockerRun: { href: 'https://docs.docker.com/reference/cli/docker/container/run/', label: 'docker run reference (-v, -w, --rm)' },
+  composeRun: { href: 'https://docs.docker.com/reference/cli/docker/compose/run/', label: 'docker compose run: one-off commands in a service' },
+  composeDown: { href: 'https://docs.docker.com/reference/cli/docker/compose/down/', label: 'docker compose down (and -v)' },
+  djangoTutorial: { href: 'https://docs.djangoproject.com/en/stable/intro/tutorial01/', label: 'Django tutorial: creating a project' },
+  npmInit: { href: 'https://docs.npmjs.com/cli/v10/commands/npm-init', label: 'npm init' },
+  expressHello: { href: 'https://expressjs.com/en/starter/hello-world.html', label: 'Express: hello world' },
 };
 
 const DB_IMAGE_LINK = { postgres: DOCS.postgresImage, mariadb: DOCS.mariadbImage, redis: DOCS.redisImage };

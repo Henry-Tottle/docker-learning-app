@@ -12,7 +12,7 @@ const HINT_TOKENS_PER_PASS = 2;
 // a project id belonging to someone else simply does not exist here.
 function createProgress(db) {
   const q = {
-    insertProject: db.prepare('INSERT INTO projects (user_id, name, app_type, database, target) VALUES (?, ?, ?, ?, ?)'),
+    insertProject: db.prepare('INSERT INTO projects (user_id, name, app_type, database, target, start) VALUES (?, ?, ?, ?, ?, ?)'),
     getProject: db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?'),
     listProjects: db.prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY created_at DESC, id DESC'),
     deleteProject: db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?'),
@@ -53,7 +53,7 @@ function createProgress(db) {
   // ---- projects -----------------------------------------------------------
   function createProject(name, answers) {
     const a = gen.normalizeAnswers(answers);
-    const info = q.insertProject.run(userId, name.trim() || 'Untitled project', a.appType, a.database, a.target);
+    const info = q.insertProject.run(userId, name.trim() || 'Untitled project', a.appType, a.database, a.target, a.start);
     return getProject(info.lastInsertRowid);
   }
   function getProject(id) {
@@ -67,7 +67,7 @@ function createProgress(db) {
     q.deleteProject.run(id, userId);
   }
   function withGenerated(row) {
-    const generated = gen.generate({ appType: row.app_type, database: row.database, target: row.target });
+    const generated = gen.generate({ appType: row.app_type, database: row.database, target: row.target, start: row.start });
     return { ...row, answers: generated.answers, generated };
   }
 

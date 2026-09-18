@@ -488,3 +488,57 @@ JSON is emitted through a helper that escapes `<`, so a `</script>` inside user 
 still allowed, because the progress bars use them and inline styles are not a script
 execution vector. A test now fetches every page type and fails if any executable inline
 script or `on*=` handler reappears.
+
+## 025 — "Where do these files go?" and starting a project from nothing
+
+**Context:** User feedback after trying the guided build: it never says where to save
+the files, what to call them or how to run them, and the Django path copies a
+`requirements.txt` the user does not have because they wanted the container first and
+the project generated inside it.
+
+**Two separate gaps.** The first was an omission: the page assumed the reader knew that
+`Dockerfile` has no extension, that the three files sit in the project root, and that
+`docker compose up --build` is the next command. The second was an unstated assumption
+inherited from the spec, which frames the app as containerizing "your own project": the
+wizard silently required the project to exist.
+
+**Fix 1: a "Using these files" panel on every guided page**, generated from the
+answers (`usageSteps` in `engine/bootstrap.js`). It states the exact filenames, the
+folder (named by manifest: next to `package.json`, `manage.py` or `index.html`), the two
+OS traps (Windows appending `.txt`, dotfiles hidden on macOS/Linux), and the run, open
+and stop commands with the right host port. For production targets with a database it
+also prints the `.env` the compose file expects, since that file is deliberately not
+generated and its absence makes compose fail with a confusing error. The same essentials
+are prepended as a comment to the copy-all text, because that is the moment the user
+leaves the page.
+
+**Fix 2: a wizard question, "Do you already have a project?"** Answering "no" adds a
+fourth file, `getting-started.txt`, rendered with the same click-for-why mechanism and
+counted in the Mode 1 gate. Its steps: hand-write the one manifest line the Dockerfile
+needs (`Django>=5.1,<6`, plus `gunicorn` for production), generate the project inside a
+throwaway container, fix ownership on Linux, then `docker compose up --build`.
+
+**Why `docker run` with the base image, not `docker compose run app`.** The obvious
+bootstrap is `docker compose run --rm app django-admin startproject config .`, but it
+needs the image built first, the build needs `requirements.txt`, and for the production
+target there is no bind mount so the generated files would vanish with the container.
+`docker run --rm -v "$PWD:/app" -w /app python:3.12-slim-bookworm sh -c "..."` sidesteps
+all three: no build, works for both targets, and it is a compact worked example of a
+bind mount from the command line, which the explanation ties back to the concept the
+user has already met in compose. `$PWD` was chosen over `$(pwd)` because it also works
+in PowerShell; the explanation tells cmd.exe users to write `%cd%`.
+
+**Why a wizard question rather than always showing bootstrap.** Most of the intended
+audience has a project; a bootstrap section would be noise for them. The question also
+makes the prerequisite explicit for everyone, which was half the problem.
+
+**Why the Linux `chown` line exists.** The dev image runs as root on purpose (#012), so
+files a root container creates through a bind mount are root-owned on a Linux host.
+macOS and Windows translate ownership; Linux does not. One `sudo chown -R "$USER" .`
+after generation is the honest fix, and it is another place the non-root concept gets
+concrete.
+
+**Not done:** Django's default project uses SQLite and knows nothing about the
+`DATABASE_URL` the compose file sets. Getting started ends with a one-line "then: add
+the driver and point DATABASES at the variable" note rather than editing `settings.py`,
+because that is Django configuration, not Docker, and the app should stay in its lane.

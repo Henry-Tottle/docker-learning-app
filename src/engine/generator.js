@@ -4,6 +4,7 @@
 const { toText } = require('./lines');
 const { CONCEPT_MAP } = require('./concepts');
 const { linksFor } = require('./links');
+const { bootstrapLines, usageSteps, usageHeader } = require('./bootstrap');
 
 const PRESETS = {
   node: require('./presets/node'),
@@ -25,6 +26,10 @@ const DATABASES = [
   { key: 'sqlite', label: 'SQLite', blurb: 'A file inside the app container, kept on a volume. No second service.' },
   { key: 'redis', label: 'Redis', blurb: 'An in-memory store for caching, queues or sessions.' },
 ];
+const STARTS = [
+  { key: 'existing', label: 'Yes, I have a project', blurb: 'The files go next to your package.json, manage.py or index.html.' },
+  { key: 'fresh', label: 'No, starting from scratch', blurb: 'You also get a Getting started file: how to create the project inside the container, so nothing is installed on your machine.' },
+];
 const TARGETS = [
   { key: 'dev', label: 'Development', blurb: 'Live-reload with your code mounted in. Bigger, friendlier image.' },
   { key: 'prod', label: 'Production', blurb: 'Multi-stage build, non-root user, nothing but what runs.' },
@@ -35,7 +40,8 @@ function normalizeAnswers(a) {
   let database = DATABASES.some((d) => d.key === a.database) ? a.database : 'none';
   if (appType === 'static') database = 'none';
   const target = TARGETS.some((t) => t.key === a.target) ? a.target : 'dev';
-  return { appType, database, target };
+  const start = STARTS.some((s) => s.key === a.start) ? a.start : 'existing';
+  return { appType, database, target, start };
 }
 
 /**
@@ -49,7 +55,11 @@ function generate(rawAnswers) {
     { name: 'Dockerfile', key: 'dockerfile', lines: out.dockerfile },
     { name: 'docker-compose.yml', key: 'compose', lines: out.compose },
     { name: '.dockerignore', key: 'dockerignore', lines: out.dockerignore },
-  ].map((f) => ({ ...f, text: toText(f.lines) }));
+  ];
+  const portsLine = out.compose.find((l) => l.id === 'c-ports');
+  const hostPort = portsLine ? Number(portsLine.blank.answer.split(':')[0]) : out.port;
+  if (answers.start === 'fresh') files.push({ name: 'getting-started.txt', key: 'bootstrap', lines: bootstrapLines(answers, hostPort) });
+  files.forEach((f) => { f.text = toText(f.lines); });
 
   // Validate invariants early so a broken preset fails loudly.
   const seen = new Set();
@@ -69,7 +79,15 @@ function generate(rawAnswers) {
   // Keep dashboard order.
   concepts.sort((a, b) => Object.keys(CONCEPT_MAP).indexOf(a) - Object.keys(CONCEPT_MAP).indexOf(b));
 
-  return { answers, files, concepts, port: out.port };
+  return {
+    answers,
+    files,
+    concepts,
+    port: out.port,
+    hostPort,
+    usage: usageSteps(answers, hostPort),
+    usageHeader: usageHeader(answers, hostPort),
+  };
 }
 
 function allLines(generated) {
@@ -85,4 +103,4 @@ function findLine(generated, id) {
   return allLines(generated).find((l) => l.id === id) || null;
 }
 
-module.exports = { generate, normalizeAnswers, allLines, explainableLines, blankLines, findLine, APP_TYPES, DATABASES, TARGETS };
+module.exports = { generate, normalizeAnswers, allLines, explainableLines, blankLines, findLine, APP_TYPES, DATABASES, TARGETS, STARTS };

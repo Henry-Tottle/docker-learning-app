@@ -119,12 +119,17 @@ The same recipe applies to any platform that builds a Dockerfile and offers a vo
 ## How to use it
 
 1. **Why Docker?** (`/uses`) if you are starting from zero.
-2. **New project**: three questions (app type; database: none, PostgreSQL, MariaDB, SQLite
-   or Redis; dev/prod). SQLite is deliberately *not* a second service: it becomes a
-   volume on the app itself, the same way this app stores its own progress.
+2. **New project**: four questions (app type; database: none, PostgreSQL, MariaDB, SQLite
+   or Redis; dev/prod; and whether the project already exists). SQLite is deliberately
+   *not* a second service: it becomes a volume on the app itself, the same way this app
+   stores its own progress. Answer "starting from scratch" and you also get a Getting
+   started file that creates the project inside a container, so nothing is installed on
+   your machine.
 3. **Guided build**: click every highlighted line. Each explanation ends with links to the
    official documentation for that instruction. The files unlock for download once every
    explanation has been opened. Opening an explanation also unlocks that concept's quiz.
+   A "Using these files" panel at the bottom says exactly where to save them, what to call
+   them, what a production `.env` needs, and how to run and stop the result.
 4. **Quizzes** (`/dashboard` or any concept link): 2–3 questions, all must be right, retry
    freely. Passing marks the concept mastered and earns hint tokens.
 5. **Scaffold & fill**: fill the blanks. Blanks for concepts you have not mastered are
@@ -171,6 +176,8 @@ want to understand the tradeoffs.
   `src/engine/compose.js`, plus native driver packages in the Django preset's `NATIVE`
   table if its Python driver needs them. An embedded database (like SQLite) is a
   different shape: see the `o.database === 'sqlite'` branches for the pattern.
+- **Change the onboarding text**: `src/engine/bootstrap.js` holds both the "Using these
+  files" steps and the Getting started file for fresh projects.
 - **Add or fix a "read more" link**: every URL is in `src/engine/links.js`, keyed by
   name; lines pick them up by id in `LINE_LINKS`, concepts in `concepts.js`.
 - **Add a concept**: append to `CONCEPTS` in `concepts.js`, then tag lines with its key.

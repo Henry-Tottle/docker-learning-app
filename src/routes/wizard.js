@@ -1,11 +1,11 @@
 'use strict';
 const express = require('express');
-const { APP_TYPES, DATABASES, TARGETS, generate } = require('../engine/generator');
+const { APP_TYPES, DATABASES, TARGETS, STARTS, generate } = require('../engine/generator');
 
 const router = express.Router();
 
 router.get('/', (req, res) => {
-  res.render('wizard', { title: 'Describe your project', appTypes: APP_TYPES, databases: DATABASES, targets: TARGETS, values: { name: '', appType: 'node', database: 'none', target: 'dev' }, errors: [] });
+  res.render('wizard', { title: 'Describe your project', appTypes: APP_TYPES, databases: DATABASES, targets: TARGETS, starts: STARTS, values: { name: '', appType: 'node', database: 'none', target: 'dev', start: 'existing' }, errors: [] });
 });
 
 router.post('/', (req, res) => {
@@ -15,14 +15,16 @@ router.post('/', (req, res) => {
     appType: req.body.appType,
     database: req.body.database,
     target: req.body.target,
+    start: req.body.start || 'existing', // radios always send one; only garbage is rejected
   };
   const errors = [];
   if (!values.name) errors.push('Give the project a name, even just "my api".');
   if (!APP_TYPES.some((t) => t.key === values.appType)) errors.push('Pick an app type.');
   if (!DATABASES.some((d) => d.key === values.database)) errors.push('Pick a database option.');
   if (!TARGETS.some((t) => t.key === values.target)) errors.push('Pick dev or production.');
+  if (!STARTS.some((s) => s.key === values.start)) errors.push('Say whether the project already exists.');
   if (errors.length) {
-    return res.status(400).render('wizard', { title: 'Describe your project', appTypes: APP_TYPES, databases: DATABASES, targets: TARGETS, values, errors });
+    return res.status(400).render('wizard', { title: 'Describe your project', appTypes: APP_TYPES, databases: DATABASES, targets: TARGETS, starts: STARTS, values, errors });
   }
   const project = progress.createProject(values.name, values);
   res.redirect(`/projects/${project.id}`);

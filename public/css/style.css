@@ -160,3 +160,10 @@ form.inline { display: inline; margin: 0; }
 .reset-code code { padding: .3rem .6rem; letter-spacing: .08em; }
 .actions { white-space: nowrap; }
 .actions form { margin-right: .3rem; }
+
+.usage { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .6rem 1.4rem 1rem; margin-top: 2rem; }
+.usage-steps { padding-left: 1.2rem; }
+.usage-steps li { margin-bottom: 1rem; }
+.usage-steps h3 { margin: .2rem 0; }
+.usage-code { background: var(--code-bg); color: var(--code-ink); font-family: var(--mono); font-size: .9rem; padding: .6rem .9rem; border-radius: 6px; overflow-x: auto; margin: .4rem 0; }
+.usage .note { margin: .2rem 0; font-size: .9rem; }

@@ -31,12 +31,35 @@ test('wizard rejects a missing name', async () => {
   } finally { t.close(); }
 });
 
+test('a fresh project shows Getting started on the guided page and hides it from scaffold', async () => {
+  const t = await startApp();
+  try {
+    const c = t.client(); await c.register('alice');
+    const created = await c.form('/wizard', { name: 'new thing', appType: 'django', database: 'sqlite', target: 'dev', start: 'fresh' });
+    assert.equal(created.status, 302);
+    const p = new URL(created.headers.get('location'), t.base).pathname;
+    const guided = await (await c.get(p + '/guided')).text();
+    assert.match(guided, /getting-started\.txt/);
+    assert.match(guided, /Using these files/);
+    assert.match(guided, /startproject config/);
+    assert.match(guided, /starting from scratch|new, empty folder/);
+    assert.doesNotMatch(await (await c.get(p + '/scaffold')).text(), /getting-started\.txt/);
+    assert.match(await (await c.get(p)).text(), /starting from scratch/);
+    const old = await c.form('/wizard', { name: 'old thing', appType: 'node', database: 'none', target: 'dev', start: 'existing' });
+    const p2 = new URL(old.headers.get('location'), t.base).pathname;
+    const g2 = await (await c.get(p2 + '/guided')).text();
+    assert.doesNotMatch(g2, /getting-started\.txt/);
+    assert.match(g2, /folder that holds package\.json/);
+    assert.equal((await c.form('/wizard', { name: 'x', appType: 'node', database: 'none', target: 'dev', start: 'maybe' })).status, 400);
+  } finally { t.close(); }
+});
+
 for (const answers of [
   { appType: 'node', database: 'postgres', target: 'prod' },
-  { appType: 'django', database: 'postgres', target: 'dev' },
+  { appType: 'django', database: 'postgres', target: 'dev', start: 'fresh' },
   { appType: 'django', database: 'sqlite', target: 'prod' },
   { appType: 'django', database: 'mariadb', target: 'prod' },
-]) test(`full progression for ${answers.appType} + ${answers.database} + ${answers.target}`, async () => {
+]) test(`full progression for ${answers.appType} + ${answers.database} + ${answers.target}${answers.start === 'fresh' ? ' (fresh)' : ''}`, async () => {
   const t = await startApp();
   const c = t.client();
   const { get, form, json } = c;

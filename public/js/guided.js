@@ -32,7 +32,7 @@
 
   var copy = document.getElementById('copy-all');
   if (copy) copy.addEventListener('click', function () {
-    var text = cfg.files.map(function (f) { return '# ---- ' + f.name + ' ----\n' + f.text; }).join('\n');
+    var text = cfg.header + cfg.files.map(function (f) { return '# ---- ' + f.name + ' ----\n' + f.text; }).join('\n');
     navigator.clipboard.writeText(text).then(function () { copy.textContent = 'Copied'; setTimeout(function () { copy.textContent = 'Copy all to clipboard'; }, 1500); });
   });
 })();

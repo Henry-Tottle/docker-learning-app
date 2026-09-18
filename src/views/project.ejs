@@ -4,7 +4,8 @@
 <p class="muted">
   <%= appTypes.find((t) => t.key === project.answers.appType).label %> ·
   <%= databases.find((d) => d.key === project.answers.database).label %> ·
-  <%= targets.find((t) => t.key === project.answers.target).label %> target
+  <%= targets.find((t) => t.key === project.answers.target).label %> target ·
+  <%= project.answers.start === 'fresh' ? 'starting from scratch' : 'existing project' %>
 </p>
 
 <div class="modes">

@@ -22,7 +22,7 @@
 </div>
 
 <div class="files">
-  <% generated.files.forEach((file) => { %>
+  <% generated.files.filter((f) => f.key !== 'bootstrap').forEach((file) => { %>
     <section class="file">
       <h3 class="file-name"><code><%= file.name %></code></h3>
       <div class="code">

@@ -71,7 +71,7 @@ function build({ database, target }) {
         'df-manifest',
         'COPY ___ ./',
         'requirements.txt',
-        'Only the dependency list is copied first, on purpose. Docker caches each instruction while its inputs are unchanged, so the pip install below is reused across builds until requirements.txt itself changes. Copying all the source here would rerun pip on every edit.',
+        'Only the dependency list is copied first, on purpose. Docker caches each instruction while its inputs are unchanged, so the pip install below is reused across builds until requirements.txt itself changes. Copying all the source here would rerun pip on every edit. No requirements.txt yet? It is a one-line text file you write by hand; see Getting started.',
         {
           concept: 'layer-caching',
           prompt: 'file to copy',
@@ -192,7 +192,7 @@ function build({ database, target }) {
         'df-manifest',
         'COPY ___ ./',
         'requirements.txt',
-        'Only the dependency list is copied first, on purpose. Docker caches each instruction while its inputs are unchanged, so the pip install below is reused across builds until requirements.txt itself changes.',
+        'Only the dependency list is copied first, on purpose. Docker caches each instruction while its inputs are unchanged, so the pip install below is reused across builds until requirements.txt itself changes. No requirements.txt yet? It is a one-line text file you write by hand; see Getting started.',
         {
           concept: 'layer-caching',
           prompt: 'file to copy',
