@@ -1,0 +1,35 @@
+<%- include('partials/header') %>
+<h1>Progress</h1>
+<p class="lede">The scaffolding shrinking, made visible. Each concept moves from locked (not yet met) to unlocked (explained, quiz available) to mastered (quiz passed).</p>
+<div class="bar"><div class="bar-fill" style="width: <%= overview.percent %>%"></div></div>
+<p class="muted"><%= overview.mastered %> mastered · <%= overview.unlocked %> unlocked · <%= overview.locked %> locked · 💡 <%= overview.hintTokens %> hint tokens</p>
+
+<ul class="concept-grid">
+  <% overview.concepts.forEach((c) => { %>
+    <li class="concept-card <%= c.status %>">
+      <span class="pill <%= c.status %>"><%= c.status %></span>
+      <h3><a href="/concepts/<%= c.key %>"><%= c.title %></a></h3>
+      <p><%= c.summary %></p>
+      <p class="muted"><% if (c.attempts) { %>Best <%= c.bestScore %>/<%= c.total %> over <%= c.attempts %> attempt<%= c.attempts === 1 ? '' : 's' %><% } else if (c.status === 'locked') { %>Meet it in a Guided build first<% } else { %>Quiz ready, <%= c.total %> questions<% } %></p>
+    </li>
+  <% }) %>
+</ul>
+
+<% if (projects.length) { %>
+  <h2>Projects</h2>
+  <table class="table">
+    <thead><tr><th>Project</th><th>Stack</th><th>Guided</th><th>Scaffold</th><th>Free build</th></tr></thead>
+    <tbody>
+      <% projects.forEach((p) => { %>
+        <tr>
+          <td><a href="/projects/<%= p.id %>"><%= p.name %></a></td>
+          <td class="muted"><%= p.app_type %> · <%= p.database %> · <%= p.target %></td>
+          <td><%= p.summary.mode1.viewed %>/<%= p.summary.mode1.total %></td>
+          <td><%= p.summary.mode2.correct %>/<%= p.summary.mode2.total %><% if (p.summary.mode2.locked) { %> <span class="muted">(<%= p.summary.mode2.locked %> locked)</span><% } %></td>
+          <td><%= p.summary.mode3.unlocked ? (p.summary.mode3.passed ? 'passed' : `open, ${p.summary.mode3.submissions.length} attempts`) : `locked (${p.summary.mode3.missing.length} to master)` %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+<%- include('partials/footer') %>

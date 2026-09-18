@@ -1,0 +1,48 @@
+<%- include('partials/header') %>
+<h1>Describe your project</h1>
+<p class="lede">Three questions. The answers decide which lines end up in your files and which concepts you will need to master.</p>
+<% if (errors.length) { %>
+  <div class="flash error"><ul><% errors.forEach((e) => { %><li><%= e %></li><% }) %></ul></div>
+<% } %>
+<form method="post" action="/wizard" class="wizard">
+  <label class="field">
+    <span>Project name</span>
+    <input name="name" value="<%= values.name %>" placeholder="e.g. my-api" required>
+  </label>
+
+  <fieldset>
+    <legend>What kind of app is it?</legend>
+    <% appTypes.forEach((t) => { %>
+      <label class="choice">
+        <input type="radio" name="appType" value="<%= t.key %>" <%= values.appType === t.key ? 'checked' : '' %>>
+        <span><strong><%= t.label %></strong><br><small><%= t.blurb %></small></span>
+      </label>
+    <% }) %>
+  </fieldset>
+
+  <fieldset id="db-fieldset">
+    <legend>Does it need a database?</legend>
+    <% databases.forEach((d) => { %>
+      <label class="choice">
+        <input type="radio" name="database" value="<%= d.key %>" <%= values.database === d.key ? 'checked' : '' %>>
+        <span><strong><%= d.label %></strong><br><small><%= d.blurb %></small></span>
+      </label>
+    <% }) %>
+    <p class="muted" id="db-note" hidden>A static site has no server code, so it cannot talk to a database. This choice will be ignored.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Dev or production target?</legend>
+    <% targets.forEach((t) => { %>
+      <label class="choice">
+        <input type="radio" name="target" value="<%= t.key %>" <%= values.target === t.key ? 'checked' : '' %>>
+        <span><strong><%= t.label %></strong><br><small><%= t.blurb %></small></span>
+      </label>
+    <% }) %>
+  </fieldset>
+
+  <p class="muted" id="preview">Loading preview…</p>
+  <button class="button primary" type="submit">Generate my files</button>
+</form>
+<script src="/js/wizard.js"></script>
+<%- include('partials/footer') %>

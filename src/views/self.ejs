@@ -1,0 +1,10 @@
+<%- include('partials/header') %>
+<h1>How this app was containerized</h1>
+<p class="lede">The files below are read from this app's own repository at request time. They are the real thing, not a sanitised copy. Click any line for the reasoning. They are a production-shaped build: multi-stage, pinned base, non-root, with a <code>.dockerignore</code> that keeps the database and any <code>.env</code> out of the image.</p>
+<p class="muted">Run it yourself: <code>docker compose up --build</code> in the project folder, then open <a href="http://localhost:3000">localhost:3000</a>.</p>
+<div class="files">
+  <% walkthrough.files.forEach((file) => { %>
+    <%- include('partials/annotated-file', { file, viewed: new Set(), concepts, mode: 'self' }) %>
+  <% }) %>
+</div>
+<%- include('partials/footer') %>

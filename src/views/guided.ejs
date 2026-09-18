@@ -1,0 +1,33 @@
+<%- include('partials/header') %>
+<p class="crumbs"><a href="/">Projects</a> › <a href="/projects/<%= project.id %>"><%= project.name %></a> › Guided build</p>
+<h1>Guided build</h1>
+<p class="lede">Click any highlighted line to see why it is there. The files unlock for copying once you have opened every explanation: <span id="viewed-count"><%= status.viewed %></span> of <%= status.total %> so far.</p>
+
+<div class="sticky-status" id="gate" data-complete="<%= status.complete %>">
+  <div class="bar small"><div class="bar-fill" id="gate-bar" style="width: <%= Math.round(status.viewed / status.total * 100) %>%"></div></div>
+  <div class="gate-actions" <%= status.complete ? '' : 'hidden' %> id="gate-actions">
+    <strong>All explained.</strong>
+    <% generated.files.forEach((f) => { %>
+      <a class="button small" href="/projects/<%= project.id %>/guided/files/<%= f.key %>">Download <%= f.name %></a>
+    <% }) %>
+    <button class="button small" type="button" id="copy-all">Copy all to clipboard</button>
+    <a class="button small primary" href="/projects/<%= project.id %>">Back to project</a>
+  </div>
+  <p class="muted" id="gate-locked" <%= status.complete ? 'hidden' : '' %>>Copy and download unlock when every line has been opened once. Quizzes for a concept unlock the first time you open one of its explanations.</p>
+</div>
+
+<div class="files">
+  <% generated.files.forEach((file) => { %>
+    <%- include('partials/annotated-file', { file, viewed, concepts, mode: 'guided' }) %>
+  <% }) %>
+</div>
+
+<script>
+  window.GUIDED = {
+    projectId: <%= project.id %>,
+    files: <%- JSON.stringify(generated.files.map((f) => ({ name: f.name, text: f.text }))) %>,
+    conceptStatus: <%- JSON.stringify(Object.fromEntries(generated.concepts.map((k) => [k, conceptStatus(k)]))) %>
+  };
+</script>
+<script src="/js/guided.js"></script>
+<%- include('partials/footer') %>

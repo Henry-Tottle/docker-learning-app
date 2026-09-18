@@ -1,0 +1,11 @@
+<%- include('partials/header') %>
+<h1>What would you use Docker for?</h1>
+<p class="lede">Docker packages an application together with everything it needs to run (runtime, libraries, config) into an <strong>image</strong>, and runs copies of that image as isolated processes called <strong>containers</strong>. That is the whole idea. Here is what it buys you in practice.</p>
+<% uses.forEach((u) => { %>
+  <section class="use <%= u.django ? 'callout' : '' %>">
+    <h2><%= u.title %></h2>
+    <p><%= u.body %></p>
+  </section>
+<% }) %>
+<p><a class="button primary" href="/wizard">Try it on your own project</a></p>
+<%- include('partials/footer') %>

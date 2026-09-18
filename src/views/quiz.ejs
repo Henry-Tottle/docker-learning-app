@@ -1,0 +1,46 @@
+<%- include('partials/header') %>
+<p class="crumbs"><a href="/dashboard">Progress</a> › <%= concept.title %></p>
+<h1><%= concept.title %></h1>
+<p class="lede"><%= concept.summary %></p>
+
+<% if (status === 'locked') { %>
+  <div class="flash warn">
+    <strong>This quiz is locked.</strong> It opens the first time you read one of this concept's explanations in Guided build. That ordering is on purpose: the quiz checks whether the explanation landed, so the explanation comes first.
+    <% if (back) { %><br><a href="<%= back %>">Go back</a><% } else { %><br><a href="/wizard">Start a project</a> to reach the explanations.<% } %>
+  </div>
+<% } else { %>
+  <% if (grade) { %>
+    <div class="flash <%= grade.passed ? 'ok' : 'warn' %>">
+      <strong><%= grade.passed ? 'Passed.' : 'Not yet.' %></strong> <%= grade.score %> of <%= grade.total %> correct.
+      <% if (grade.passed && tokensEarned) { %> You earned <%= tokensEarned %> hint tokens.<% } %>
+      <% if (grade.passed) { %> This concept is now mastered; blanks that depend on it are unlocked.<% } else { %> Read the reasons below and try again; there is no attempt limit.<% } %>
+      <% if (back) { %> <a href="<%= back %>">Go back</a><% } %>
+    </div>
+  <% } else if (status === 'mastered') { %>
+    <p class="flash ok">Already mastered. You can retake it any time.</p>
+  <% } %>
+
+  <form method="post" action="/concepts/<%= concept.key %>/quiz" class="quiz">
+    <% if (back) { %><input type="hidden" name="back" value="<%= back %>"><% } %>
+    <% concept.quiz.forEach((question, i) => { const r = grade ? grade.results[i] : null; %>
+      <fieldset class="question <%= r ? (r.correct ? 'correct' : 'wrong') : '' %>">
+        <legend><%= i + 1 %>. <%- question.q.replace(/`([^`]+)`/g, '<code>$1</code>') %></legend>
+        <% question.options.forEach((opt, j) => { %>
+          <label class="choice">
+            <input type="radio" name="q<%= i %>" value="<%= j %>" <%= chosen[i] === j ? 'checked' : '' %> required>
+            <span><%= opt.text %></span>
+          </label>
+        <% }) %>
+        <% if (r) { %>
+          <p class="why <%= r.correct ? 'ok' : 'wrong' %>"><strong><%= r.correct ? 'Right.' : 'Not this one.' %></strong> <%= r.why %></p>
+        <% } %>
+      </fieldset>
+    <% }) %>
+    <button class="button primary" type="submit"><%= grade ? 'Try again' : 'Check answers' %></button>
+  </form>
+
+  <% if (attempts.length) { %>
+    <p class="muted"><%= attempts.length %> attempt<%= attempts.length === 1 ? '' : 's' %>, best <%= Math.max(...attempts.map((a) => a.score)) %>/<%= concept.quiz.length %>.</p>
+  <% } %>
+<% } %>
+<%- include('partials/footer') %>

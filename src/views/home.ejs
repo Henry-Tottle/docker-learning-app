@@ -1,0 +1,49 @@
+<%- include('partials/header') %>
+<section class="hero">
+  <h1>Learn to containerize <em>your</em> project</h1>
+  <p class="lede">Not by copying a Dockerfile, but by understanding every line of one, then filling in the gaps yourself, then writing it from nothing. Three modes, less help each time.</p>
+  <p><a class="button primary" href="/wizard">Describe your project</a> <a class="button" href="/uses">First: what is Docker even for?</a></p>
+</section>
+
+<section class="modes">
+  <div class="mode-card">
+    <h2>1 · Guided build</h2>
+    <p>Answer three questions. Get a working Dockerfile and compose file where every line explains <strong>why</strong> it exists. You can only take the files once you have read every explanation.</p>
+  </div>
+  <div class="mode-card">
+    <h2>2 · Scaffold &amp; fill</h2>
+    <p>The same files with the important parts blanked out. You fill them in; the app tells you why an answer is wrong, not just that it is. Hints cost tokens you earn by passing quizzes.</p>
+  </div>
+  <div class="mode-card">
+    <h2>3 · Free build</h2>
+    <p>A blank editor and your original answers. Write it all yourself. A checker gives feedback on what is missing or unsafe, never the answer. Unlocks when every concept for your stack is mastered.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Your projects</h2>
+  <% if (projects.length === 0) { %>
+    <p class="muted">None yet. <a href="/wizard">Start one.</a></p>
+  <% } else { %>
+    <ul class="project-list">
+      <% projects.forEach((p) => { %>
+        <li>
+          <a href="/projects/<%= p.id %>"><strong><%= p.name %></strong></a>
+          <span class="muted"><%= p.app_type %> · <%= p.database %> · <%= p.target %></span>
+          <span class="pills">
+            <span class="pill <%= p.summary.mode1.complete ? 'done' : '' %>">Guided <%= p.summary.mode1.viewed %>/<%= p.summary.mode1.total %></span>
+            <span class="pill <%= p.summary.mode2.complete ? 'done' : '' %>">Scaffold <%= p.summary.mode2.correct %>/<%= p.summary.mode2.total %></span>
+            <span class="pill <%= p.summary.mode3.passed ? 'done' : (p.summary.mode3.unlocked ? '' : 'locked') %>">Free build <%= p.summary.mode3.unlocked ? (p.summary.mode3.passed ? 'passed' : 'open') : 'locked' %></span>
+          </span>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<section>
+  <h2>Mastery</h2>
+  <div class="bar"><div class="bar-fill" style="width: <%= overview.percent %>%"></div></div>
+  <p class="muted"><%= overview.mastered %> of <%= overview.total %> concepts mastered · <a href="/dashboard">see the breakdown</a></p>
+</section>
+<%- include('partials/footer') %>

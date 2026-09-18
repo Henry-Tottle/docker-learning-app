@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %> · Docker Learning</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <a class="brand" href="/">🐳 Docker, explained as you build</a>
+  <nav>
+    <a href="/wizard" class="<%= path === '/wizard' ? 'active' : '' %>">New project</a>
+    <a href="/dashboard" class="<%= path === '/dashboard' ? 'active' : '' %>">Progress</a>
+    <a href="/uses" class="<%= path === '/uses' ? 'active' : '' %>">Why Docker?</a>
+    <a href="/how-this-app-was-containerized" class="<%= path.startsWith('/how-this') ? 'active' : '' %>">How this app was containerized</a>
+    <span class="tokens" title="Hint tokens: spend one to reveal a hint in Scaffold &amp; Fill. Pass quizzes to earn more.">💡 <span id="hint-token-count"><%= hintTokens %></span></span>
+  </nav>
+</header>
+<main class="container">

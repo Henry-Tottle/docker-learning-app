@@ -1,0 +1,57 @@
+<%- include('partials/header') %>
+<p class="crumbs"><a href="/">Projects</a> › <%= project.name %></p>
+<h1><%= project.name %></h1>
+<p class="muted">
+  <%= appTypes.find((t) => t.key === project.answers.appType).label %> ·
+  <%= databases.find((d) => d.key === project.answers.database).label %> ·
+  <%= targets.find((t) => t.key === project.answers.target).label %> target
+</p>
+
+<div class="modes">
+  <div class="mode-card">
+    <h2>1 · Guided build</h2>
+    <p>Read every line. <%= summary.mode1.viewed %> of <%= summary.mode1.total %> explanations opened.</p>
+    <div class="bar small"><div class="bar-fill" style="width: <%= Math.round(summary.mode1.viewed / Math.max(1, summary.mode1.total) * 100) %>%"></div></div>
+    <a class="button primary" href="/projects/<%= project.id %>/guided"><%= summary.mode1.complete ? 'Revisit' : (summary.mode1.viewed ? 'Continue' : 'Start') %></a>
+  </div>
+  <div class="mode-card">
+    <h2>2 · Scaffold &amp; fill</h2>
+    <p><%= summary.mode2.correct %> of <%= summary.mode2.total %> blanks filled.
+      <% if (summary.mode2.locked) { %><br><span class="warn-text"><%= summary.mode2.locked %> blank<%= summary.mode2.locked === 1 ? ' is' : 's are' %> locked behind quizzes you have not passed.</span><% } %>
+    </p>
+    <div class="bar small"><div class="bar-fill" style="width: <%= Math.round(summary.mode2.correct / Math.max(1, summary.mode2.total) * 100) %>%"></div></div>
+    <a class="button <%= summary.mode2.locked === summary.mode2.total ? '' : 'primary' %>" href="/projects/<%= project.id %>/scaffold">Open</a>
+  </div>
+  <div class="mode-card <%= summary.mode3.unlocked ? '' : 'locked' %>">
+    <h2>3 · Free build</h2>
+    <% if (summary.mode3.unlocked) { %>
+      <p><strong>You've got the building blocks. Try it without help.</strong><br>
+        <%= summary.mode3.submissions.length %> attempt<%= summary.mode3.submissions.length === 1 ? '' : 's' %> so far<%= summary.mode3.passed ? ', latest passed with no errors.' : '.' %></p>
+      <a class="button primary" href="/projects/<%= project.id %>/free">Open</a>
+    <% } else { %>
+      <p>Unlocks when every concept this stack uses is mastered. Still to pass:</p>
+      <ul class="plain">
+        <% summary.mode3.missing.forEach((m) => { %>
+          <li><a href="/concepts/<%= m.key %>?back=<%= encodeURIComponent('/projects/' + project.id) %>"><%= m.title %></a> <span class="pill <%= m.status %>"><%= m.status === 'locked' ? 'read about it in Guided build first' : 'quiz available' %></span></li>
+        <% }) %>
+      </ul>
+      <a class="button" href="/projects/<%= project.id %>/free">Peek</a>
+    <% } %>
+  </div>
+</div>
+
+<h2>Concepts this stack uses</h2>
+<ul class="concept-list">
+  <% concepts.forEach((c) => { %>
+    <li class="<%= c.status %>">
+      <span class="dot"></span>
+      <a href="/concepts/<%= c.key %>?back=<%= encodeURIComponent('/projects/' + project.id) %>"><%= c.title %></a>
+      <span class="pill <%= c.status %>"><%= c.status %></span>
+    </li>
+  <% }) %>
+</ul>
+
+<form method="post" action="/projects/<%= project.id %>/delete" class="danger-zone" onsubmit="return confirm('Delete this project and its progress? Concept mastery is kept.')">
+  <button class="button subtle" type="submit">Delete project</button>
+</form>
+<%- include('partials/footer') %>

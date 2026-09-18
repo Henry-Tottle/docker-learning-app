@@ -1,0 +1,61 @@
+<%- include('partials/header') %>
+<p class="crumbs"><a href="/">Projects</a> › <a href="/projects/<%= project.id %>"><%= project.name %></a> › Scaffold &amp; fill</p>
+<h1>Scaffold &amp; fill</h1>
+<p class="lede">Same files, but the decisions are yours now. Fill each blank and check it. A wrong answer gets a reason, not just a red mark. A hint costs one token (you have <strong id="tokens-here"><%= hintTokens %></strong>).</p>
+
+<% if (status.lockedConcepts.length) { %>
+  <div class="flash warn">
+    <strong>Some blanks are locked.</strong> A blank stays locked until you pass the quiz for its concept. That is deliberate: filling in a line you cannot explain is copy-paste with extra steps.
+    <ul>
+      <% status.lockedConcepts.forEach((c) => { %>
+        <li><a href="/concepts/<%= c.key %>?back=<%= encodeURIComponent(path) %>"><%= c.title %></a>
+          <% if (c.status === 'locked') { %><span class="muted">(open one of its explanations in Guided build first)</span><% } else { %><span class="muted">(quiz available)</span><% } %></li>
+      <% }) %>
+    </ul>
+  </div>
+<% } %>
+
+<div class="sticky-status">
+  <div class="bar small"><div class="bar-fill" id="fill-bar" style="width: <%= Math.round(status.correct / Math.max(1, status.total) * 100) %>%"></div></div>
+  <p class="muted"><span id="fill-count"><%= status.correct %></span> of <%= status.total %> blanks correct.
+    <span id="fill-done" <%= status.complete ? '' : 'hidden' %>><strong>All filled.</strong> <a href="/projects/<%= project.id %>">Back to project</a></span></p>
+</div>
+
+<div class="files">
+  <% generated.files.forEach((file) => { %>
+    <section class="file">
+      <h3 class="file-name"><code><%= file.name %></code></h3>
+      <div class="code">
+        <% file.lines.forEach((l) => { %>
+          <% if (!l.blank) { %>
+            <div class="code-line plain"><pre><%= l.text %></pre></div>
+          <% } else { const st = byId[l.id]; const parts = l.blank.template.split('___'); %>
+            <div class="code-line blank <%= st.locked ? 'locked' : '' %> <%= st.correct ? 'correct' : '' %>" data-blank-id="<%= l.id %>">
+              <div class="blank-row">
+                <pre class="before"><%= parts[0] %></pre>
+                <% if (st.locked) { %>
+                  <span class="blank-input locked" title="Locked">🔒 <%= l.blank.prompt %></span>
+                  <a class="lock-note" href="/concepts/<%= l.concept %>?back=<%= encodeURIComponent(path) %>">pass "<%= concepts[l.concept].title %>" to unlock</a>
+                <% } else if (st.correct) { %>
+                  <input class="blank-input" value="<%= l.blank.answer %>" disabled>
+                  <span class="result ok">✓</span>
+                <% } else { %>
+                  <input class="blank-input" placeholder="<%= l.blank.prompt %>" spellcheck="false" autocomplete="off">
+                  <button class="button tiny check" type="button">Check</button>
+                  <button class="button tiny hint" type="button" title="Costs one hint token"><%= st.hintShown ? 'Hint' : 'Hint (−1 💡)' %></button>
+                <% } %>
+                <pre class="after"><%= parts[1] %></pre>
+              </div>
+              <div class="feedback" hidden></div>
+              <div class="hint-text" <%= st.hintShown ? '' : 'hidden' %>><% if (st.hintShown) { %>💡 <%= l.blank.hint %><% } %></div>
+            </div>
+          <% } %>
+        <% }) %>
+      </div>
+    </section>
+  <% }) %>
+</div>
+
+<script>window.SCAFFOLD = { projectId: <%= project.id %> };</script>
+<script src="/js/scaffold.js"></script>
+<%- include('partials/footer') %>

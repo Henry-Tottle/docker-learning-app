@@ -1,0 +1,59 @@
+<%- include('partials/header') %>
+<p class="crumbs"><a href="/">Projects</a> › <a href="/projects/<%= project.id %>"><%= project.name %></a> › Free build</p>
+<h1>Free build</h1>
+
+<% if (!status.unlocked) { %>
+  <div class="flash warn">
+    <strong>Locked.</strong> Free build opens once every concept your stack uses is mastered. You can read this page, but the checker will not run. Still to pass:
+    <ul>
+      <% status.missing.forEach((m) => { %>
+        <li><a href="/concepts/<%= m.key %>?back=<%= encodeURIComponent(path) %>"><%= m.title %></a> <span class="muted">(<%= m.status === 'locked' ? 'open one of its explanations in Guided build first' : 'quiz available' %>)</span></li>
+      <% }) %>
+    </ul>
+  </div>
+<% } else { %>
+  <p class="lede">No generated code this time. Here is what you told the wizard; everything else is up to you. The checker reports what is missing, wrong or unsafe and points at the concept, but it will not hand you the line.</p>
+<% } %>
+
+<div class="brief">
+  <h2>Your brief</h2>
+  <ul>
+    <li><strong>App type:</strong> <%= appTypes.find((t) => t.key === project.answers.appType).label %></li>
+    <li><strong>Database:</strong> <%= databases.find((d) => d.key === project.answers.database).label %></li>
+    <li><strong>Target:</strong> <%= targets.find((t) => t.key === project.answers.target).label %></li>
+    <li><strong>Concepts in play:</strong> <%= status.required.map((r) => r.title).join(', ') %></li>
+  </ul>
+</div>
+
+<div class="editors">
+  <label class="editor"><span>Dockerfile</span><textarea id="ed-dockerfile" spellcheck="false" <%= status.unlocked ? '' : 'disabled' %>><%= latest ? latest.dockerfile : '' %></textarea></label>
+  <label class="editor"><span>docker-compose.yml</span><textarea id="ed-compose" spellcheck="false" <%= status.unlocked ? '' : 'disabled' %>><%= latest ? latest.compose : '' %></textarea></label>
+  <label class="editor"><span>.dockerignore</span><textarea id="ed-dockerignore" spellcheck="false" <%= status.unlocked ? '' : 'disabled' %>><%= latest ? latest.dockerignore : '' %></textarea></label>
+</div>
+<p>
+  <button class="button primary" id="run-check" type="button" <%= status.unlocked ? '' : 'disabled' %>>Check my files</button>
+  <span class="muted" id="check-status"></span>
+</p>
+
+<section id="report" <%= latest ? '' : 'hidden' %>>
+  <h2>Feedback</h2>
+  <p class="muted" id="report-summary"><% if (latest) { %>Last check: <%= latest.report.summary.errors %> errors, <%= latest.report.summary.warnings %> warnings, <%= latest.report.summary.ok %> things right.<% } %></p>
+  <ul class="findings" id="findings">
+    <% if (latest) { latest.report.findings.forEach((f) => { %>
+      <li class="finding <%= f.level %>"><span class="lvl"><%= f.level %></span> <code><%= f.file %></code> <%= f.message %><% if (f.hint) { %> <em class="hint">Think about: <%= f.hint %></em><% } %><% if (f.conceptTitle) { %> <a class="concept-link" href="/concepts/<%= f.concept %>?back=<%= encodeURIComponent(path) %>"><%= f.conceptTitle %></a><% } %></li>
+    <% }) } %>
+  </ul>
+</section>
+
+<% if (status.submissions.length) { %>
+  <h2>Your attempts</h2>
+  <ul class="plain attempts">
+    <% status.submissions.forEach((s) => { %>
+      <li><%= s.submitted_at %> · <%= s.errors %> errors · <%= s.warnings %> warnings</li>
+    <% }) %>
+  </ul>
+<% } %>
+
+<script>window.FREE = { projectId: <%= project.id %>, unlocked: <%= status.unlocked %> };</script>
+<script src="/js/free.js"></script>
+<%- include('partials/footer') %>
