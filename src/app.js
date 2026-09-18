@@ -3,34 +3,43 @@ const path = require('node:path');
 const express = require('express');
 const { openDatabase } = require('./db');
 const { createProgress } = require('./services/progress');
+const { createAuth } = require('./services/auth');
 const { CONCEPTS } = require('./engine/concepts');
+const { sessionMiddleware, sameOrigin, requireLogin, requireAdmin } = require('./middleware/auth');
 
 function createApp(options = {}) {
+  const env = options.env || process.env;
   const db = options.db || openDatabase(options.dbPath);
   const progress = createProgress(db);
+  const auth = createAuth(db, { env });
 
   const app = express();
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));
+  // Behind a TLS-terminating proxy (Railway, most PaaS) X-Forwarded-Proto is
+  // what tells us the user is on https, which decides the cookie's Secure flag.
+  if (env.TRUST_PROXY) app.set('trust proxy', Number(env.TRUST_PROXY) || 1);
   app.locals.db = db;
-  app.locals.progress = progress;
+  app.locals.auth = auth;
   app.locals.concepts = CONCEPTS;
 
   app.use(express.urlencoded({ extended: false }));
   app.use(express.json({ limit: '200kb' }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
-
-  // Values every view needs.
+  app.use(sessionMiddleware(auth, progress));
   app.use((req, res, next) => {
     res.locals.path = req.path;
-    res.locals.hintTokens = progress.hintTokens();
+    res.locals.registrationMode = auth.registrationMode();
     next();
   });
+  app.use(sameOrigin); // after the view locals: it may render the error page
 
-  app.use('/', require('./routes/index'));
-  app.use('/wizard', require('./routes/wizard'));
-  app.use('/projects', require('./routes/projects'));
-  app.use('/concepts', require('./routes/quiz'));
+  app.use('/', require('./routes/index'));           // public pages + healthz; dashboard guards itself
+  app.use('/', require('./routes/auth'));            // login, register, logout, account, admin
+  app.use('/wizard', requireLogin, require('./routes/wizard'));
+  app.use('/projects', requireLogin, require('./routes/projects'));
+  app.use('/concepts', requireLogin, require('./routes/quiz'));
+  app.use('/admin', requireAdmin, require('./routes/admin'));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: 'Not found', message: `Nothing lives at ${req.path}.` });

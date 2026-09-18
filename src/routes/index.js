@@ -2,13 +2,14 @@
 const express = require('express');
 const { USES } = require('../content/uses');
 const { selfWalkthrough } = require('../content/self');
+const { requireLogin } = require('../middleware/auth');
 
 const router = express.Router();
 
 router.get('/', (req, res) => {
-  const { progress } = req.app.locals;
-  const projects = progress.listProjects().map((p) => ({ ...p, summary: progress.projectSummary(p) }));
-  res.render('home', { title: 'Docker, explained as you build', projects, overview: progress.overview() });
+  const progress = req.progress;
+  const projects = progress ? progress.listProjects().map((p) => ({ ...p, summary: progress.projectSummary(p) })) : [];
+  res.render('home', { title: 'Docker, explained as you build', projects, overview: progress ? progress.overview() : null });
 });
 
 router.get('/healthz', (req, res) => {
@@ -21,8 +22,8 @@ router.get('/uses', (req, res) => {
   res.render('uses', { title: 'What would you use Docker for?', uses: USES });
 });
 
-router.get('/dashboard', (req, res) => {
-  const { progress } = req.app.locals;
+router.get('/dashboard', requireLogin, (req, res) => {
+  const progress = req.progress;
   const projects = progress.listProjects().map((p) => ({ ...p, summary: progress.projectSummary(p) }));
   res.render('dashboard', { title: 'Progress', overview: progress.overview(), projects });
 });

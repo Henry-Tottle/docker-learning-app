@@ -146,3 +146,13 @@ details.code-line[open] > summary { background: var(--code-hi); }
 .use.callout { background: var(--panel); border-left: 4px solid var(--accent); padding: .3rem 1rem; border-radius: 0 8px 8px 0; }
 .danger-zone { margin-top: 3rem; }
 .attempts li { color: var(--muted); font-size: .9rem; }
+
+form.inline { display: inline; margin: 0; }
+.auth-form { max-width: 420px; }
+.auth-form input { width: 100%; padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.auth-form .field { margin-bottom: 1rem; }
+.auth-form .field span { display: block; font-weight: 600; margin-bottom: .3rem; }
+.links { list-style: none; padding: 0; margin: .3rem 0 0; font-size: .85rem; }
+.links li::before { content: "↗ "; color: var(--muted); }
+.links a { color: var(--accent); }
+.table select { font: inherit; padding: .15rem .3rem; }

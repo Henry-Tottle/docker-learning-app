@@ -10,11 +10,21 @@
 <header class="site-header">
   <a class="brand" href="/">🐳 Docker, explained as you build</a>
   <nav>
-    <a href="/wizard" class="<%= path === '/wizard' ? 'active' : '' %>">New project</a>
-    <a href="/dashboard" class="<%= path === '/dashboard' ? 'active' : '' %>">Progress</a>
+    <% if (user) { %>
+      <a href="/wizard" class="<%= path === '/wizard' ? 'active' : '' %>">New project</a>
+      <a href="/dashboard" class="<%= path === '/dashboard' ? 'active' : '' %>">Progress</a>
+    <% } %>
     <a href="/uses" class="<%= path === '/uses' ? 'active' : '' %>">Why Docker?</a>
     <a href="/how-this-app-was-containerized" class="<%= path.startsWith('/how-this') ? 'active' : '' %>">How this app was containerized</a>
-    <span class="tokens" title="Hint tokens: spend one to reveal a hint in Scaffold &amp; Fill. Pass quizzes to earn more.">💡 <span id="hint-token-count"><%= hintTokens %></span></span>
+    <% if (user) { %>
+      <span class="tokens" title="Hint tokens: spend one to reveal a hint in Scaffold &amp; Fill. Pass quizzes to earn more.">💡 <span id="hint-token-count"><%= hintTokens %></span></span>
+      <% if (user.role === 'admin') { %><a href="/admin/users" class="<%= path.startsWith('/admin') ? 'active' : '' %>">Users</a><% } %>
+      <a href="/account" class="<%= path === '/account' ? 'active' : '' %>"><%= user.username %></a>
+      <form method="post" action="/logout" class="inline"><button class="button small subtle" type="submit">Log out</button></form>
+    <% } else { %>
+      <a href="/login" class="<%= path === '/login' ? 'active' : '' %>">Log in</a>
+      <% if (registrationMode !== 'closed') { %><a href="/register" class="button small primary">Sign up</a><% } %>
+    <% } %>
   </nav>
 </header>
 <main class="container">

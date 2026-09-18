@@ -8,6 +8,7 @@
 //   text     the literal line as it appears in the file
 //   explain  2-4 sentences answering *why* the line is there (null for filler)
 //   concept  key from concepts.js, or null
+//   links    [{ href, label }] "read more" links, filled in by the generator
 //   blank    Mode 2 metadata, or null:
 //              template  text with ___ where the user must fill in
 //              answer    canonical answer (shown after success)
@@ -17,12 +18,12 @@
 //              prompt    short label for the input placeholder
 
 function line(id, text, explain, opts = {}) {
-  return { id, text, explain, concept: opts.concept || null, blank: null };
+  return { id, text, explain, concept: opts.concept || null, links: opts.links || [], blank: null };
 }
 
 // A line with no explanation: blank separators and purely structural YAML.
 function raw(text) {
-  return { id: null, text, explain: null, concept: null, blank: null };
+  return { id: null, text, explain: null, concept: null, links: [], blank: null };
 }
 
 function blank(id, template, answer, explain, opts = {}) {
@@ -32,6 +33,7 @@ function blank(id, template, answer, explain, opts = {}) {
     text: template.replace('___', answer),
     explain,
     concept: opts.concept || null,
+    links: opts.links || [],
     blank: {
       template,
       answer,

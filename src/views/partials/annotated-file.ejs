@@ -16,6 +16,9 @@
           </summary>
           <div class="why">
             <p><%= l.explain %></p>
+            <% if (l.links && l.links.length) { %>
+              <ul class="links"><% l.links.forEach((k) => { %><li><a href="<%= k.href %>" target="_blank" rel="noopener"><%= k.label %></a></li><% }) %></ul>
+            <% } %>
             <% if (l.concept && concepts[l.concept]) { %>
               <p class="concept-tag">Concept: <a href="/concepts/<%= l.concept %>?back=<%= encodeURIComponent(path) %>"><%= concepts[l.concept].title %></a>
                 <span class="concept-status" data-concept-status="<%= l.concept %>"></span></p>

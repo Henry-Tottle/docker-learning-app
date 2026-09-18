@@ -34,14 +34,16 @@ keys everything on `id` and `concept`. One data model, three renderings, no drif
    ┌──────────────────── engine/ (pure) ────────────────────┐
    │ presets/*.js ─► generator.js ─► annotated files        │
    │ concepts.js   (quizzes)        lines.js (blank check)  │
-   │ linter.js     (Mode 3 checker)                         │
+   │ linter.js     (Mode 3 checker) links.js (read-more)    │
    └────────────────────────────────────────────────────────┘
                               │
                               ▼
-        services/progress.js  ── all gating rules, all DB access
+        services/auth.js      ── users, sessions, roles
+        services/progress.js  ── forUser(id): all gating rules, all learning-state DB access
                               │
                               ▼
-        routes/*.js  ── thin: load project, ask progress, render view
+        middleware/auth.js    ── cookie -> req.user, req.progress; requireLogin/Admin
+        routes/*.js           ── thin: load project, ask progress, render view
                               │
                               ▼
         views/*.ejs + public/js  ── server-rendered, small JSON calls for interactivity
@@ -78,6 +80,18 @@ consistent, so they live in one file with the schema in `db.js` next to it.
 State is global for concepts (mastery is knowledge, not a project attribute) and
 per-project for explanation views, blanks and free-build submissions.
 
+### Accounts (`src/services/auth.js`, `src/middleware/auth.js`)
+
+Added when the app moved from "single local user" to "hosted". `auth.js` owns users,
+password hashing (scrypt, via `node:crypto`), sessions (random tokens, stored hashed) and
+registration policy. `middleware/auth.js` turns the session cookie into `req.user` and
+`req.progress`, and provides `requireLogin`, `requireAdmin` and a same-origin check for
+state-changing requests.
+
+The important design point is where authorisation lives: nowhere in the routes.
+`progress.forUser(userId)` scopes every query, so another user's project is simply not
+found. Roles only gate the admin router. See DECISIONS #021.
+
 ### Routes and views
 
 Routes are thin. Each Mode has one page route and one or two JSON endpoints the page's
@@ -107,5 +121,8 @@ client. EJS plus three small scripts keeps the server the source of truth.
 - A blank rejects a reasonable answer → that line's `accept` list; add a string or regex.
 - A quiz question is ambiguous → `src/engine/concepts.js`.
 - Something unlocked when it should not have → `src/services/progress.js`, nowhere else.
+- Someone saw something that is not theirs → `progress.forUser` scoping, or a route that
+  bypassed `req.progress` and used the database directly (none should).
+- A read-more link is wrong → `src/engine/links.js`.
 - The checker complains about correct files → `linter.js`, and note the test that runs
   every preset through it will tell you the moment the two disagree.

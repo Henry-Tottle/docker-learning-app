@@ -6,9 +6,12 @@
 // Order here is the order they appear on the dashboard: roughly the order a
 // beginner meets them when reading a Dockerfile top to bottom.
 
+const { DOCS } = require('./links');
+
 const CONCEPTS = [
   {
     key: 'base-images',
+    links: [DOCS.from, DOCS.digest],
     title: 'Base images & pinning',
     summary:
       'A base image is the starting filesystem your container is built on top of: an OS plus, usually, a language runtime. ' +
@@ -45,6 +48,7 @@ const CONCEPTS = [
   },
   {
     key: 'layer-caching',
+    links: [DOCS.cache, DOCS.layers],
     title: 'Layer caching',
     summary:
       'Every instruction in a Dockerfile produces a layer, and Docker reuses a layer from the last build if the instruction and everything before it are unchanged. ' +
@@ -72,6 +76,7 @@ const CONCEPTS = [
   },
   {
     key: 'dockerignore',
+    links: [DOCS.dockerignore],
     title: '.dockerignore',
     summary:
       'When you run docker build, Docker first sends the whole project folder (the "build context") to the builder. ' +
@@ -99,6 +104,7 @@ const CONCEPTS = [
   },
   {
     key: 'multi-stage-builds',
+    links: [DOCS.multistage],
     title: 'Multi-stage builds',
     summary:
       'A Dockerfile can have several FROM lines. Each starts a new stage, and a later stage can copy files out of an earlier one. ' +
@@ -126,6 +132,7 @@ const CONCEPTS = [
   },
   {
     key: 'non-root-user',
+    links: [DOCS.user, DOCS.nodeNonRoot],
     title: 'Running as a non-root user',
     summary:
       'By default a container\'s process runs as root inside the container. If an attacker gets code execution in your app, root makes any container escape or file tampering far easier. ' +
@@ -153,6 +160,7 @@ const CONCEPTS = [
   },
   {
     key: 'expose-vs-publish',
+    links: [DOCS.expose, DOCS.publish, DOCS.composePorts],
     title: 'EXPOSE vs publishing ports',
     summary:
       'EXPOSE in a Dockerfile is documentation: it records which port the app listens on but opens nothing. ' +
@@ -189,6 +197,7 @@ const CONCEPTS = [
   },
   {
     key: 'volumes-vs-bind-mounts',
+    links: [DOCS.volumes, DOCS.bindMounts, DOCS.composeVolumes],
     title: 'Volumes vs bind mounts',
     summary:
       'A container\'s filesystem is thrown away when the container is removed. A bind mount maps a folder on your machine into the container (good for live-editing code). ' +
@@ -216,6 +225,7 @@ const CONCEPTS = [
   },
   {
     key: 'env-vars',
+    links: [DOCS.env, DOCS.composeEnv, DOCS.composeEnvFile],
     title: 'Environment variables vs .env files',
     summary:
       'Configuration that differs between machines (database URLs, secrets, debug flags) should come from the environment, not be hard-coded. ' +
@@ -243,6 +253,7 @@ const CONCEPTS = [
   },
   {
     key: 'compose-networking',
+    links: [DOCS.composeNetworking, DOCS.startupOrder],
     title: 'Networking between compose services',
     summary:
       'compose puts all services in one file on a private network and gives each a DNS name equal to its service name. ' +

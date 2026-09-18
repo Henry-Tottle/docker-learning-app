@@ -9,7 +9,7 @@ router.get('/', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { progress } = req.app.locals;
+  const progress = req.progress;
   const values = {
     name: String(req.body.name || '').trim(),
     appType: req.body.appType,

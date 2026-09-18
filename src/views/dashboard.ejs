@@ -10,6 +10,7 @@
       <span class="pill <%= c.status %>"><%= c.status %></span>
       <h3><a href="/concepts/<%= c.key %>"><%= c.title %></a></h3>
       <p><%= c.summary %></p>
+      <% if (c.links && c.links.length) { %><ul class="links"><% c.links.forEach((k) => { %><li><a href="<%= k.href %>" target="_blank" rel="noopener"><%= k.label %></a></li><% }) %></ul><% } %>
       <p class="muted"><% if (c.attempts) { %>Best <%= c.bestScore %>/<%= c.total %> over <%= c.attempts %> attempt<%= c.attempts === 1 ? '' : 's' %><% } else if (c.status === 'locked') { %>Meet it in a Guided build first<% } else { %>Quiz ready, <%= c.total %> questions<% } %></p>
     </li>
   <% }) %>

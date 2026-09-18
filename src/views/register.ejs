@@ -1,0 +1,14 @@
+<%- include('partials/header') %>
+<h1>Create an account</h1>
+<% if (first) { %><div class="flash ok"><strong>First account.</strong> This server has no users yet, so this account becomes the administrator and adopts any progress recorded before accounts existed.</div><% } %>
+<% if (errors.length) { %><div class="flash error"><ul><% errors.forEach((e) => { %><li><%= e %></li><% }) %></ul></div><% } %>
+<form method="post" action="/register" class="wizard auth-form">
+  <label class="field"><span>Username</span><input name="username" value="<%= username %>" autocomplete="username" required autofocus pattern="[A-Za-z0-9][A-Za-z0-9_\-]{2,31}" title="3-32 characters: letters, digits, _ or -"></label>
+  <label class="field"><span>Password</span><input name="password" type="password" autocomplete="new-password" required minlength="8"></label>
+  <% if (mode === 'invite') { %>
+    <label class="field"><span>Invite code</span><input name="invite" autocomplete="off" required></label>
+  <% } %>
+  <button class="button primary" type="submit">Create account</button>
+</form>
+<p class="muted">Already have one? <a href="/login">Log in.</a></p>
+<%- include('partials/footer') %>

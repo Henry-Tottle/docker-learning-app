@@ -3,6 +3,7 @@
 // Pure: no I/O, so it is trivially testable and reusable.
 const { toText } = require('./lines');
 const { CONCEPT_MAP } = require('./concepts');
+const { linksFor } = require('./links');
 
 const PRESETS = {
   node: require('./presets/node'),
@@ -55,6 +56,7 @@ function generate(rawAnswers) {
   for (const f of files) {
     for (const l of f.lines) {
       if (!l.id) continue;
+      if (!l.links.length) l.links = linksFor(l.id, answers);
       if (seen.has(l.id)) throw new Error(`duplicate line id ${l.id} in ${f.name}`);
       seen.add(l.id);
       if (l.concept && !CONCEPT_MAP[l.concept]) throw new Error(`unknown concept ${l.concept} on ${l.id}`);

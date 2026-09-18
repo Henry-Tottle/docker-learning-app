@@ -349,3 +349,100 @@ named volume is undeclared, errors in production if nothing prepares the data di
 for the non-root user, warns if a database service is present anyway, and warns if the
 SQLite file is not in `.dockerignore`. For MariaDB it finds the database service under
 either image name.
+
+## 021 — Accounts added, and how (spec said "no auth for v1")
+
+**Context:** The spec explicitly left auth out of v1. The app is now going to be hosted
+on Railway, on a public URL, so a single shared progress record is no longer acceptable
+and unauthenticated writes are an abuse vector. The scope change is deliberate and
+requested.
+
+**What was added:** username/password accounts, sessions, two roles (`user`, `admin`),
+project ownership, per-user concept mastery and hint tokens, an admin page for roles and
+deletions, password change, and three registration modes.
+
+**Decision: no new dependencies.** Node's `crypto` provides scrypt (password hashing
+with a per-user salt and constant-time comparison) and `randomBytes` (session tokens).
+Sessions are a table in the same SQLite file, keyed by the SHA-256 of the cookie value
+so a copied database does not contain usable sessions. The cookie is `HttpOnly`,
+`SameSite=Lax`, and `Secure` whenever the request arrived over https (behind a proxy this
+requires `TRUST_PROXY=1`, see README). The alternatives, `express-session` plus a store
+adapter plus `bcrypt`, would have added three dependencies with native or maintenance
+concerns for a total of maybe sixty lines saved, and would have hidden the mechanism
+that is worth learning here.
+
+**Decision: authorisation is enforced by scoping, not by checks in routes.**
+`progress.forUser(userId)` returns an API whose every query includes `user_id`. A route
+asking for someone else's project gets `null` and renders 404, the same as a project
+that never existed. There is no `if (project.user_id !== req.user.id)` anywhere to
+forget. Admin capabilities are limited to user management; admins do not see other
+people's projects, because nothing in the app needs that.
+
+**Decision: first account becomes admin; registration mode is an environment setting.**
+`open` for a laptop, `invite` (shared code) for a small public deployment, `closed` once
+everyone is in. The bootstrap rule (first account allowed even when closed) means a fresh
+deployment can always be claimed. The README tells the deployer to register immediately,
+and to prefer `invite` from the start so nobody can race them.
+
+**CSRF:** `SameSite=Lax` stops browsers attaching the cookie to cross-site POSTs, and
+the JSON endpoints require a JSON content type, which cross-site forms cannot send. On
+top of that, a middleware rejects any state-changing request whose `Origin` (or `Referer`)
+host differs from the `Host` we were reached on. No per-form tokens. This is the standard
+modern position for a same-origin app; it would need revisiting if the app ever served
+an API to other origins.
+
+**Rate limiting:** an in-memory counter per (client IP, username), ten failures per
+fifteen minutes. In-memory is fine for one process; a second replica would not share it,
+and the README's Railway recipe runs one.
+
+**Migration:** `PRAGMA user_version` now tracks the schema. A v0 file (the single-user
+layout) is migrated in place: new tables, `user_id` columns defaulting to 0, and the
+first account to register adopts every `user_id = 0` row plus the old hint-token count.
+A test creates a v0 file from the old schema and checks all of that.
+
+One SQLite detail bit during this: `ALTER TABLE ... ADD COLUMN` refuses a `REFERENCES`
+column with a non-null default, so `projects` is rebuilt with the documented
+copy/drop/rename procedure. That in turn has to run with `foreign_keys = OFF`, because
+dropping the old `projects` with cascades on would silently delete every explanation
+view, blank and submission. The migration checks `foreign_key_check` before committing
+and the test asserts the child rows survived.
+
+## 022 — "Read more" links: one registry, attached by line id
+
+**Context:** Feedback that explanations like "a digest pin is the next step for a real
+deployment" should link to how.
+
+**Decision:** `src/engine/links.js` holds every URL once, with a label. Generated lines
+get links from a `LINE_LINKS` map keyed by line id (with per-app-type variants where the
+right reference differs, e.g. gunicorn docs for Django's CMD, Node's signal-handling
+notes for Node's). Concepts carry their own list, shown on the quiz page and the
+dashboard. The self-containerization page attaches links per explained line.
+
+**Why by id rather than inline in presets:** the same line id appears in several presets
+and both targets; one map means one edit when a URL moves. It also made auditing easy:
+every URL was fetched during the build and two 404s were replaced before shipping.
+Links open in a new tab with `rel="noopener"`; the app never needs to leave the page.
+
+**Why official docs only:** blog posts rot and contradict each other; the Docker,
+npm, Django and gunicorn references are maintained and are what a working engineer
+actually consults.
+
+## 023 — Cross-platform README and the choices behind it
+
+- **Docker first, Node second.** Cloning and `docker compose up --build` is the same three
+  commands on macOS, Linux and Windows, which is precisely the app's own sales pitch
+  ("fast onboarding"). The Node path is for people editing the code.
+- **`.gitattributes` with `* text=auto eol=lf`.** Windows Git defaults can rewrite text
+  files to CRLF on checkout. The Dockerfile and JS tolerate that, but "byte-identical on
+  every OS" is worth one line, and it removes a class of "works on my machine" report.
+- **`--env-file-if-exists=.env` in the npm scripts.** Setting environment variables is
+  the one thing that differs across shells (`FOO=1 cmd`, `$env:FOO=1`, `set FOO=1`).
+  Node 22 can load a `.env` file itself, so the README can give one instruction for all
+  three. The Docker image does not use it: `.env` is in `.dockerignore`, and containers
+  get real environment variables.
+- **`docker compose` vs `docker-compose`.** Both are mentioned because the hyphenated v1
+  is what people already have; the note says which is maintained.
+- **Railway section is labelled as untested.** It is written from Railway's docs, checked
+  today, including the `RAILWAY_RUN_UID=0` workaround for volumes that are not writable
+  by a non-root user. I have not run this deployment, and the README says so rather than
+  implying otherwise.

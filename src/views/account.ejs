@@ -1,0 +1,13 @@
+<%- include('partials/header') %>
+<h1>Your account</h1>
+<p class="muted">Signed in as <strong><%= user.username %></strong> (<%= user.role %>).</p>
+<% if (message) { %><div class="flash ok"><%= message %></div><% } %>
+<% if (error) { %><div class="flash error"><%= error %></div><% } %>
+<h2>Change password</h2>
+<form method="post" action="/account/password" class="wizard auth-form">
+  <label class="field"><span>Current password</span><input name="current" type="password" autocomplete="current-password" required></label>
+  <label class="field"><span>New password</span><input name="next" type="password" autocomplete="new-password" required minlength="8"></label>
+  <button class="button primary" type="submit">Change password</button>
+</form>
+<p class="muted">Changing it logs out every other device.</p>
+<%- include('partials/footer') %>

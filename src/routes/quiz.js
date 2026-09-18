@@ -12,14 +12,14 @@ function loadConcept(req, res, next) {
 }
 
 router.get('/:key', loadConcept, (req, res) => {
-  const { progress } = req.app.locals;
+  const progress = req.progress;
   const status = progress.conceptStatus(req.concept.key);
   const back = typeof req.query.back === 'string' && req.query.back.startsWith('/') ? req.query.back : null;
   res.render('quiz', { title: `Quiz: ${req.concept.title}`, concept: req.concept, status, attempts: progress.quizAttempts(req.concept.key), grade: null, chosen: [], back });
 });
 
 router.post('/:key/quiz', loadConcept, (req, res) => {
-  const { progress } = req.app.locals;
+  const progress = req.progress;
   const status = progress.conceptStatus(req.concept.key);
   const back = typeof req.body.back === 'string' && req.body.back.startsWith('/') ? req.body.back : null;
   if (status === 'locked') {

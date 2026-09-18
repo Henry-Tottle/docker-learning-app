@@ -5,30 +5,33 @@
 const { CONCEPTS, CONCEPT_MAP } = require('../engine/concepts');
 const gen = require('../engine/generator');
 
-const HINT_TOKENS_START = 3; // matches the INSERT in db.js
 const HINT_TOKENS_PER_PASS = 2;
 
+// createProgress(db).forUser(userId) returns the per-user API. Every query is
+// scoped by user id, so a route can only ever touch the caller's own rows:
+// a project id belonging to someone else simply does not exist here.
 function createProgress(db) {
   const q = {
-    insertProject: db.prepare('INSERT INTO projects (name, app_type, database, target) VALUES (?, ?, ?, ?)'),
-    getProject: db.prepare('SELECT * FROM projects WHERE id = ?'),
-    listProjects: db.prepare('SELECT * FROM projects ORDER BY created_at DESC, id DESC'),
-    deleteProject: db.prepare('DELETE FROM projects WHERE id = ?'),
+    insertProject: db.prepare('INSERT INTO projects (user_id, name, app_type, database, target) VALUES (?, ?, ?, ?, ?)'),
+    getProject: db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?'),
+    listProjects: db.prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY created_at DESC, id DESC'),
+    deleteProject: db.prepare('DELETE FROM projects WHERE id = ? AND user_id = ?'),
 
     viewed: db.prepare('SELECT line_id FROM explanation_views WHERE project_id = ?'),
     markViewed: db.prepare('INSERT OR IGNORE INTO explanation_views (project_id, line_id) VALUES (?, ?)'),
 
-    concept: db.prepare('SELECT * FROM concept_progress WHERE concept = ?'),
-    concepts: db.prepare('SELECT * FROM concept_progress'),
-    unlockConcept: db.prepare("INSERT OR IGNORE INTO concept_progress (concept, status) VALUES (?, 'unlocked')"),
+    concept: db.prepare('SELECT * FROM concept_progress WHERE user_id = ? AND concept = ?'),
+    concepts: db.prepare('SELECT * FROM concept_progress WHERE user_id = ?'),
+    unlockConcept: db.prepare("INSERT OR IGNORE INTO concept_progress (user_id, concept, status) VALUES (?, ?, 'unlocked')"),
     updateConcept: db.prepare(
-      "UPDATE concept_progress SET status = CASE WHEN ? THEN 'mastered' ELSE status END, best_score = MAX(best_score, ?), attempts = attempts + 1, mastered_at = CASE WHEN ? AND mastered_at IS NULL THEN datetime('now') ELSE mastered_at END WHERE concept = ?"
+      "UPDATE concept_progress SET status = CASE WHEN ? THEN 'mastered' ELSE status END, best_score = MAX(best_score, ?), attempts = attempts + 1, mastered_at = CASE WHEN ? AND mastered_at IS NULL THEN datetime('now') ELSE mastered_at END WHERE user_id = ? AND concept = ?"
     ),
-    insertAttempt: db.prepare('INSERT INTO quiz_attempts (concept, score, total, passed, answers) VALUES (?, ?, ?, ?, ?)'),
-    attempts: db.prepare('SELECT * FROM quiz_attempts WHERE concept = ? ORDER BY id DESC'),
+    insertAttempt: db.prepare('INSERT INTO quiz_attempts (user_id, concept, score, total, passed, answers) VALUES (?, ?, ?, ?, ?, ?)'),
+    attempts: db.prepare('SELECT * FROM quiz_attempts WHERE user_id = ? AND concept = ? ORDER BY id DESC'),
 
-    getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
-    setSetting: db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
+    getTokens: db.prepare('SELECT hint_tokens FROM users WHERE id = ?'),
+    addTokens: db.prepare('UPDATE users SET hint_tokens = hint_tokens + ? WHERE id = ?'),
+    spendToken: db.prepare('UPDATE users SET hint_tokens = hint_tokens - 1 WHERE id = ? AND hint_tokens > 0'),
 
     blanks: db.prepare('SELECT * FROM blank_progress WHERE project_id = ?'),
     upsertBlank: db.prepare(
@@ -46,21 +49,22 @@ function createProgress(db) {
     latestSubmission: db.prepare('SELECT * FROM free_build_submissions WHERE project_id = ? ORDER BY id DESC LIMIT 1'),
   };
 
+  function forUser(userId) {
   // ---- projects -----------------------------------------------------------
   function createProject(name, answers) {
     const a = gen.normalizeAnswers(answers);
-    const info = q.insertProject.run(name.trim() || 'Untitled project', a.appType, a.database, a.target);
+    const info = q.insertProject.run(userId, name.trim() || 'Untitled project', a.appType, a.database, a.target);
     return getProject(info.lastInsertRowid);
   }
   function getProject(id) {
-    const row = q.getProject.get(id);
+    const row = q.getProject.get(id, userId);
     return row ? withGenerated(row) : null;
   }
   function listProjects() {
-    return q.listProjects.all().map(withGenerated);
+    return q.listProjects.all(userId).map(withGenerated);
   }
   function deleteProject(id) {
-    q.deleteProject.run(id);
+    q.deleteProject.run(id, userId);
   }
   function withGenerated(row) {
     const generated = gen.generate({ appType: row.app_type, database: row.database, target: row.target });
@@ -76,7 +80,7 @@ function createProgress(db) {
     if (!line || !line.explain) return false;
     q.markViewed.run(project.id, lineId);
     // Viewing an explanation is what unlocks the concept's quiz.
-    if (line.concept) q.unlockConcept.run(line.concept);
+    if (line.concept) q.unlockConcept.run(userId, line.concept);
     return true;
   }
   function mode1Status(project) {
@@ -88,12 +92,12 @@ function createProgress(db) {
 
   // ---- concepts & quizzes ---------------------------------------------------
   function conceptStatus(key) {
-    const row = q.concept.get(key);
+    const row = q.concept.get(userId, key);
     if (!row) return 'locked';
     return row.status; // unlocked | mastered
   }
   function conceptRows() {
-    const rows = Object.fromEntries(q.concepts.all().map((r) => [r.concept, r]));
+    const rows = Object.fromEntries(q.concepts.all(userId).map((r) => [r.concept, r]));
     return CONCEPTS.map((c) => {
       const r = rows[c.key];
       return {
@@ -108,9 +112,9 @@ function createProgress(db) {
   }
   function recordQuiz(key, grade, answers) {
     const wasMastered = conceptStatus(key) === 'mastered';
-    q.unlockConcept.run(key);
-    q.updateConcept.run(grade.passed ? 1 : 0, grade.score, grade.passed ? 1 : 0, key);
-    q.insertAttempt.run(key, grade.score, grade.total, grade.passed ? 1 : 0, JSON.stringify(answers));
+    q.unlockConcept.run(userId, key);
+    q.updateConcept.run(grade.passed ? 1 : 0, grade.score, grade.passed ? 1 : 0, userId, key);
+    q.insertAttempt.run(userId, key, grade.score, grade.total, grade.passed ? 1 : 0, JSON.stringify(answers));
     let tokensEarned = 0;
     if (grade.passed && !wasMastered) {
       tokensEarned = HINT_TOKENS_PER_PASS;
@@ -119,22 +123,19 @@ function createProgress(db) {
     return { tokensEarned };
   }
   function quizAttempts(key) {
-    return q.attempts.all(key);
+    return q.attempts.all(userId, key);
   }
 
   // ---- hint tokens ----------------------------------------------------------
   function hintTokens() {
-    const row = q.getSetting.get('hint_tokens');
-    return row ? Number(row.value) : HINT_TOKENS_START;
+    const row = q.getTokens.get(userId);
+    return row ? row.hint_tokens : 0;
   }
   function addHintTokens(n) {
-    q.setSetting.run('hint_tokens', String(hintTokens() + n));
+    q.addTokens.run(n, userId);
   }
   function spendHintToken() {
-    const t = hintTokens();
-    if (t <= 0) return false;
-    q.setSetting.run('hint_tokens', String(t - 1));
-    return true;
+    return q.spendToken.run(userId).changes === 1;
   }
 
   // ---- mode 2: blanks -------------------------------------------------------
@@ -228,6 +229,7 @@ function createProgress(db) {
   }
 
   return {
+    userId,
     createProject, getProject, listProjects, deleteProject,
     viewedIds, markViewed, mode1Status,
     conceptStatus, conceptRows, recordQuiz, quizAttempts,
@@ -237,6 +239,9 @@ function createProgress(db) {
     overview, projectSummary,
     HINT_TOKENS_PER_PASS,
   };
+  } // forUser
+
+  return { forUser, HINT_TOKENS_PER_PASS };
 }
 
 module.exports = { createProgress };

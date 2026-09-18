@@ -2,6 +2,10 @@
 <p class="crumbs"><a href="/dashboard">Progress</a> › <%= concept.title %></p>
 <h1><%= concept.title %></h1>
 <p class="lede"><%= concept.summary %></p>
+<% if (concept.links && concept.links.length) { %>
+  <p class="muted">Read more before you answer:</p>
+  <ul class="links"><% concept.links.forEach((k) => { %><li><a href="<%= k.href %>" target="_blank" rel="noopener"><%= k.label %></a></li><% }) %></ul>
+<% } %>
 
 <% if (status === 'locked') { %>
   <div class="flash warn">

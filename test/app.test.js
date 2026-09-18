@@ -1,55 +1,50 @@
 'use strict';
-// End-to-end through HTTP against an in-memory database. Walks the whole
-// progression: guided -> quizzes -> scaffold -> free build.
+// End-to-end through HTTP. Walks the whole progression for several stacks:
+// guided -> quizzes -> scaffold -> free build, as a logged-in user.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApp } = require('../src/app');
-const { openDatabase } = require('../src/db');
 const { CONCEPTS } = require('../src/engine/concepts');
 const gen = require('../src/engine/generator');
+const { startApp } = require('./helpers');
 
-let server, base;
-test.before(async () => {
-  const app = createApp({ db: openDatabase(':memory:') });
-  await new Promise((r) => { server = app.listen(0, r); });
-  base = `http://127.0.0.1:${server.address().port}`;
-});
-test.after(() => server.close());
-
-const get = (p) => fetch(base + p, { redirect: 'manual' });
-const form = (p, data) => fetch(base + p, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) });
-const json = (p, data) => fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) });
-
-test('static pages render', async () => {
-  for (const p of ['/', '/uses', '/dashboard', '/wizard', '/how-this-app-was-containerized', '/healthz']) {
-    const r = await get(p);
-    assert.equal(r.status, 200, p);
-  }
-  assert.equal((await get('/nothing-here')).status, 404);
+test('public pages render without login; private ones redirect', async () => {
+  const t = await startApp();
+  try {
+    const c = t.client();
+    for (const p of ['/', '/uses', '/how-this-app-was-containerized', '/healthz', '/login', '/register']) assert.equal((await c.get(p)).status, 200, p);
+    for (const p of ['/dashboard', '/wizard', '/projects/1', '/concepts/base-images', '/account', '/admin/users']) {
+      const r = await c.get(p);
+      assert.equal(r.status, 302, p);
+      assert.match(r.headers.get('location'), /^\/login\?next=/);
+    }
+    assert.equal((await c.json('/projects/1/guided/viewed', { lineId: 'x' })).status, 401);
+    assert.equal((await c.get('/nothing-here')).status, 404);
+  } finally { t.close(); }
 });
 
 test('wizard rejects a missing name', async () => {
-  assert.equal((await form('/wizard', { name: '', appType: 'node', database: 'postgres', target: 'prod' })).status, 400);
+  const t = await startApp();
+  try {
+    const c = t.client();
+    await c.register('alice');
+    assert.equal((await c.form('/wizard', { name: '', appType: 'node', database: 'postgres', target: 'prod' })).status, 400);
+  } finally { t.close(); }
 });
 
-// Each stack gets a fresh in-memory app so concept mastery from one run does
-// not unlock the next one.
 for (const answers of [
   { appType: 'node', database: 'postgres', target: 'prod' },
   { appType: 'django', database: 'postgres', target: 'dev' },
   { appType: 'django', database: 'sqlite', target: 'prod' },
   { appType: 'django', database: 'mariadb', target: 'prod' },
 ]) test(`full progression for ${answers.appType} + ${answers.database} + ${answers.target}`, async () => {
-  const app = createApp({ db: openDatabase(':memory:') });
-  const srv = await new Promise((r) => { const s = app.listen(0, () => r(s)); });
-  const base = `http://127.0.0.1:${srv.address().port}`;
-  const get = (p) => fetch(base + p, { redirect: 'manual' });
-  const form = (p, data) => fetch(base + p, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) });
-  const json = (p, data) => fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) });
+  const t = await startApp();
+  const c = t.client();
+  const { get, form, json } = c;
   try {
+  assert.equal((await c.register('learner')).status, 302);
   const created = await form('/wizard', { name: 'my-app', ...answers });
   assert.equal(created.status, 302);
-  const projectPath = new URL(created.headers.get('location'), base).pathname;
+  const projectPath = new URL(created.headers.get('location'), t.base).pathname;
   assert.match(projectPath, /^\/projects\/\d+$/);
   const g = gen.generate(answers);
   for (const p of ['', '/guided', '/scaffold', '/free']) assert.equal((await get(projectPath + p)).status, 200, p);
@@ -60,9 +55,10 @@ for (const answers of [
 
   // Free build locked, scaffold blanks locked.
   assert.equal((await json(projectPath + '/free/lint', { dockerfile: 'FROM x' })).status, 403);
-  assert.equal((await json(projectPath + '/scaffold/check', { blankId: 'df-base', value: 'node:22-bookworm-slim' })).status, 403);
+  assert.equal((await json(projectPath + '/scaffold/check', { blankId: 'df-base', value: 'anything' })).status, 403);
 
-  // Read every explanation.
+  // Read every explanation; the guided page shows read-more links.
+  assert.match(await (await get(projectPath + '/guided')).text(), /class="links"/);
   let last;
   for (const l of gen.explainableLines(g)) {
     const r = await json(projectPath + '/guided/viewed', { lineId: l.id });
@@ -78,12 +74,12 @@ for (const answers of [
   const tokensBefore = 3;
   let passes = 0;
   for (const key of g.concepts) {
-    const c = CONCEPTS.find((x) => x.key === key);
-    const wrong = Object.fromEntries(c.quiz.map((q, i) => [`q${i}`, (q.answer + 1) % q.options.length]));
+    const cpt = CONCEPTS.find((x) => x.key === key);
+    const wrong = Object.fromEntries(cpt.quiz.map((q, i) => [`q${i}`, (q.answer + 1) % q.options.length]));
     const r1 = await form(`/concepts/${key}/quiz`, wrong);
     assert.equal(r1.status, 200);
     assert.match(await r1.text(), /Not yet\./);
-    const right = Object.fromEntries(c.quiz.map((q, i) => [`q${i}`, q.answer]));
+    const right = Object.fromEntries(cpt.quiz.map((q, i) => [`q${i}`, q.answer]));
     const r2 = await form(`/concepts/${key}/quiz`, right);
     assert.match(await r2.text(), /Passed\./);
     passes++;
@@ -116,18 +112,13 @@ for (const answers of [
   const bad = await (await json(projectPath + '/free/lint', { dockerfile: 'FROM node', compose: '', dockerignore: '' })).json();
   assert.equal(bad.passed, false);
   assert.ok(bad.summary.errors >= 3);
-  const page = await (await get(projectPath + '/free')).text();
-  assert.match(page, /Your attempts/);
-  assert.match(page, /2 attempts|attempts/);
-
-  // Project hub reflects it all.
-  const hub = await (await get(projectPath)).text();
-  assert.match(hub, /Try it without help/);
+  assert.match(await (await get(projectPath + '/free')).text(), /Your attempts/);
+  assert.match(await (await get(projectPath)).text(), /Try it without help/);
 
   // Delete.
   assert.equal((await form(projectPath + '/delete', {})).status, 302);
   assert.equal((await get(projectPath)).status, 404);
   } finally {
-    srv.close();
+    t.close();
   }
 });
