@@ -28,14 +28,31 @@ test('static pages render', async () => {
   assert.equal((await get('/nothing-here')).status, 404);
 });
 
-test('full progression for a node + postgres + prod project', async () => {
-  // Wizard validation and creation.
+test('wizard rejects a missing name', async () => {
   assert.equal((await form('/wizard', { name: '', appType: 'node', database: 'postgres', target: 'prod' })).status, 400);
-  const created = await form('/wizard', { name: 'my-api', appType: 'node', database: 'postgres', target: 'prod' });
+});
+
+// Each stack gets a fresh in-memory app so concept mastery from one run does
+// not unlock the next one.
+for (const answers of [
+  { appType: 'node', database: 'postgres', target: 'prod' },
+  { appType: 'django', database: 'postgres', target: 'dev' },
+  { appType: 'django', database: 'sqlite', target: 'prod' },
+  { appType: 'django', database: 'mariadb', target: 'prod' },
+]) test(`full progression for ${answers.appType} + ${answers.database} + ${answers.target}`, async () => {
+  const app = createApp({ db: openDatabase(':memory:') });
+  const srv = await new Promise((r) => { const s = app.listen(0, () => r(s)); });
+  const base = `http://127.0.0.1:${srv.address().port}`;
+  const get = (p) => fetch(base + p, { redirect: 'manual' });
+  const form = (p, data) => fetch(base + p, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) });
+  const json = (p, data) => fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(data) });
+  try {
+  const created = await form('/wizard', { name: 'my-app', ...answers });
   assert.equal(created.status, 302);
   const projectPath = new URL(created.headers.get('location'), base).pathname;
   assert.match(projectPath, /^\/projects\/\d+$/);
-  const g = gen.generate({ appType: 'node', database: 'postgres', target: 'prod' });
+  const g = gen.generate(answers);
+  for (const p of ['', '/guided', '/scaffold', '/free']) assert.equal((await get(projectPath + p)).status, 200, p);
 
   // Mode 1 gate: nothing downloadable, quizzes locked.
   assert.equal((await get(projectPath + '/guided/files/dockerfile')).status, 403);
@@ -78,7 +95,8 @@ test('full progression for a node + postgres + prod project', async () => {
   assert.match(dash, new RegExp(`${tokensBefore + passes * 2} hint tokens`));
 
   // Mode 2: wrong then right, hint costs one token once.
-  const wrong = await (await json(projectPath + '/scaffold/check', { blankId: 'df-base', value: 'node:latest' })).json();
+  const baseImage = gen.findLine(g, 'df-base').blank.answer.split(':')[0];
+  const wrong = await (await json(projectPath + '/scaffold/check', { blankId: 'df-base', value: baseImage + ':latest' })).json();
   assert.equal(wrong.correct, false);
   assert.match(wrong.why, /latest/);
   const hint1 = await (await json(projectPath + '/scaffold/hint', { blankId: 'df-base' })).json();
@@ -109,4 +127,7 @@ test('full progression for a node + postgres + prod project', async () => {
   // Delete.
   assert.equal((await form(projectPath + '/delete', {})).status, 302);
   assert.equal((await get(projectPath)).status, 404);
+  } finally {
+    srv.close();
+  }
 });
